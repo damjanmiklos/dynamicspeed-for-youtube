@@ -8,7 +8,12 @@ import {
 import { parseSettings } from '../../src/lib/settings/defaults';
 import { DynamicSpeedSettingsSchema } from '../../src/lib/settings/schema';
 import { isBridgeMessage, isYouTubeOrigin } from '../../src/lib/bridge/protocol';
-import { forceJson3Url, selectCaptionTrack, toSafeTimedTextUrl } from '../../src/lib/transcript/select-track';
+import {
+  forceJson3Url,
+  selectCaptionTrack,
+  toSafeTimedTextUrl,
+  videoIdFromTimedTextUrl,
+} from '../../src/lib/transcript/select-track';
 import { parseVideoId } from '../../src/lib/youtube/video-id';
 
 describe('transcript LRU cache', () => {
@@ -133,6 +138,11 @@ describe('caption URL + track pick', () => {
     expect(
       toSafeTimedTextUrl('https://user:pass@www.youtube.com/api/timedtext?v=a'),
     ).toBeNull();
+    expect(
+      videoIdFromTimedTextUrl(
+        'https://www.youtube.com/api/timedtext?v=zvCgC1yA7_w&lang=en',
+      ),
+    ).toBe('zvCgC1yA7_w');
   });
 
   it('prefers matching manual tracks', () => {

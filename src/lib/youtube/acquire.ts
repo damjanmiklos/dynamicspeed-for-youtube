@@ -54,7 +54,50 @@ async function fetchTimedTextJson(baseUrl: string): Promise<unknown | null> {
   if (!response.ok) {
     return null;
   }
-  return response.json();
+  const text = await response.text();
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    return null;
+  }
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function readSnapshot(pageVideoId: string): Promise<PlayerSnapshot> {
+  const empty: PlayerSnapshot = {
+    videoId: pageVideoId,
+    title: null,
+    channelId: null,
+    channelName: null,
+    duration: null,
+    isLive: false,
+    isShorts: false,
+    isMusic: false,
+    tracks: [],
+  };
+  const deadline = Date.now() + 4000;
+  let snapshot = empty;
+  while (Date.now() <= deadline) {
+    const rawSnapshot = await requestFromMain<unknown>(
+      'GET_PLAYER_SNAPSHOT',
+      pageVideoId,
+      null,
+      3000,
+    ).catch(() => null);
+    snapshot = isPlayerSnapshot(rawSnapshot) ? rawSnapshot : empty;
+    if (snapshot.tracks.length > 0) {
+      return snapshot;
+    }
+    await sleep(250);
+  }
+  return snapshot;
 }
 
 function isPlayerSnapshot(value: unknown): value is PlayerSnapshot {
@@ -72,24 +115,7 @@ export async function acquireTranscript(
   if (!pageVideoId) {
     throw new Error('No video id');
   }
-  const rawSnapshot = await requestFromMain<unknown>(
-    'GET_PLAYER_SNAPSHOT',
-    pageVideoId,
-    null,
-  );
-  const snapshot: PlayerSnapshot = isPlayerSnapshot(rawSnapshot)
-    ? rawSnapshot
-    : {
-        videoId: pageVideoId,
-        title: null,
-        channelId: null,
-        channelName: null,
-        duration: null,
-        isLive: false,
-        isShorts: false,
-        isMusic: false,
-        tracks: [],
-      };
+  const snapshot = await readSnapshot(pageVideoId);
   const trustedId = pageVideoId;
 
   const track = selectCaptionTrack(asTracks(snapshot, trustedId), {
@@ -130,6 +156,7 @@ export async function acquireTranscript(
     'ACQUIRE_FALLBACK_TRANSCRIPT',
     trustedId,
     null,
+    15_000,
   ).catch(() => null);
   const capturedTokens = tokensFromUnknown(captured, settings);
   if (capturedTokens.length > 0) {

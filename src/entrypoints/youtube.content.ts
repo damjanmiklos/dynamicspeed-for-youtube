@@ -16,6 +16,7 @@ export default defineContentScript({
   runAt: 'document_idle',
   main(ctx) {
     let snapshot: PlayerSnapshot | null = null;
+    let loadGeneration = 0;
     const controller = createPlaybackController({
       getChannel: () => ({
         channelId: snapshot?.channelId ?? null,
@@ -27,7 +28,11 @@ export default defineContentScript({
     });
 
     const loadForCurrentVideo = async () => {
+      const gen = ++loadGeneration;
       const settings = await loadSettings();
+      if (gen !== loadGeneration) {
+        return;
+      }
       controller.setSettings(settings);
       const videoId = parseVideoId(location.href);
       if (!videoId) {
@@ -35,17 +40,32 @@ export default defineContentScript({
         return;
       }
       controller.setTranscriptStatus('loading');
-      try {
-        const result = await acquireTranscript(settings);
-        snapshot = result.snapshot;
-        controller.setTokens(result.tokens, 'ready');
-      } catch (error) {
-        controller.setTokens([], 'missing');
-        console.debug(
-          '[DynamicSpeed] captions unavailable',
-          error instanceof Error ? error.message : error,
-        );
+      const deadline = Date.now() + 20_000;
+      let lastError: unknown;
+      while (Date.now() < deadline && gen === loadGeneration) {
+        try {
+          const result = await acquireTranscript(settings);
+          if (gen !== loadGeneration) {
+            return;
+          }
+          if (result.tokens.length > 0) {
+            snapshot = result.snapshot;
+            controller.setTokens(result.tokens, 'ready');
+            return;
+          }
+        } catch (error) {
+          lastError = error;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 400));
       }
+      if (gen !== loadGeneration) {
+        return;
+      }
+      controller.setTokens([], 'missing');
+      console.debug(
+        '[DynamicSpeed] captions unavailable',
+        lastError instanceof Error ? lastError.message : lastError,
+      );
     };
 
     controller.setChipClickHandler(() => {
@@ -66,6 +86,13 @@ export default defineContentScript({
       if (name === 'VIDEO_ID_CHANGED') {
         snapshot = null;
         void loadForCurrentVideo();
+        return;
+      }
+      if (name === 'TIMEDTEXT_CAPTURED' || name === 'RAW_TRACKS_RESOLVED') {
+        const status = controller.getTranscriptStatus();
+        if (status === 'missing' || status === 'idle') {
+          void loadForCurrentVideo();
+        }
       }
     });
 

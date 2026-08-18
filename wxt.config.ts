@@ -11,6 +11,11 @@ export default defineConfig({
   },
   vite: () => ({
     plugins: [tailwindcss()],
+    server: {
+      watch: {
+        ignored: ['**/scratch/**', '**/node_modules/**'],
+      },
+    },
   }),
   manifest: {
     name: 'DynamicSpeed for YouTube',

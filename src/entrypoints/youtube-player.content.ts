@@ -1,6 +1,6 @@
 import { emitBridgeEvent, listenToIsolatedRequests } from '../lib/bridge/main';
 import type { CaptionTrackPayload, PlayerSnapshot } from '../lib/bridge/protocol';
-import { toSafeTimedTextUrl } from '../lib/transcript/select-track';
+import { toSafeTimedTextUrl, videoIdFromTimedTextUrl } from '../lib/transcript/select-track';
 import { parseVideoId, isShortsPath, YOUTUBE_MATCHES } from '../lib/youtube/video-id';
 
 type PlayerResponse = {
@@ -37,6 +37,7 @@ type YTPlayer = {
   getPlayerResponse?: () => PlayerResponse;
   getVideoData?: () => { video_id?: string; title?: string; author?: string };
   getDuration?: () => number;
+  loadModule?: (module: string) => void;
   setOption?: (module: string, option: string, value: unknown) => void;
 };
 
@@ -217,10 +218,51 @@ async function fetchAllowlistedTimedText(baseUrl: string): Promise<unknown | nul
   if (!timed.ok) {
     return null;
   }
-  return timed.json();
+  const text = await timed.text();
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    return null;
+  }
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 let lastCapture: { videoId: string; data: unknown } | null = null;
+
+function rememberTimedTextBody(url: string, body: unknown): void {
+  if (!toSafeTimedTextUrl(url) || body == null) {
+    return;
+  }
+  let data: object | null = null;
+  if (typeof body === 'string') {
+    const trimmed = body.trim();
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+      return;
+    }
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (typeof parsed === 'object' && parsed !== null) {
+        data = parsed;
+      }
+    } catch {
+      return;
+    }
+  } else if (typeof body === 'object') {
+    data = body;
+  }
+  if (!data) {
+    return;
+  }
+  const videoId =
+    videoIdFromTimedTextUrl(url) ?? parseVideoId(location.href) ?? '';
+  lastCapture = { videoId, data };
+  if (videoId) {
+    emitBridgeEvent('TIMEDTEXT_CAPTURED', videoId, null);
+  }
+}
 
 function installTimedtextObserver(): void {
   const originalFetch = window.fetch.bind(window);
@@ -238,37 +280,118 @@ function installTimedtextObserver(): void {
               : '';
       if (toSafeTimedTextUrl(url)) {
         const clone = response.clone();
-        void clone.json().then((data) => {
-          const videoId = parseVideoId(location.href) ?? '';
-          lastCapture = { videoId, data };
-        });
+        void clone.text().then((text) => rememberTimedTextBody(url, text));
       }
     } catch {
       // ignore observer errors
     }
     return response;
   };
+
+  const xhrOpen = XMLHttpRequest.prototype.open;
+  const xhrSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (this: XMLHttpRequest, ...args: unknown[]) {
+    const url = args[1];
+    (this as XMLHttpRequest & { __dsTimedTextUrl?: string }).__dsTimedTextUrl =
+      typeof url === 'string' ? url : String(url ?? '');
+    return xhrOpen.apply(this, args as Parameters<XMLHttpRequest['open']>);
+  };
+  XMLHttpRequest.prototype.send = function (
+    this: XMLHttpRequest,
+    body?: Document | XMLHttpRequestBodyInit | null,
+  ) {
+    const url =
+      (this as XMLHttpRequest & { __dsTimedTextUrl?: string }).__dsTimedTextUrl ??
+      '';
+    if (toSafeTimedTextUrl(url)) {
+      this.addEventListener('load', () => {
+        const payload =
+          this.responseType === 'json' ? this.response : this.responseText;
+        rememberTimedTextBody(url, payload);
+      });
+    }
+    return xhrSend.call(this, body);
+  };
 }
 
-async function waitForCapture(videoId: string, timeoutMs: number): Promise<unknown> {
-  const start = Date.now();
+function captionsAlreadyVisible(): boolean {
+  const button = document.querySelector<HTMLButtonElement>('.ytp-subtitles-button');
+  const label = button?.getAttribute('aria-label') ?? '';
+  return (
+    button?.getAttribute('aria-pressed') === 'true' &&
+    !/unavailable/i.test(label)
+  );
+}
+
+function captureMatchesVideo(videoId: string): unknown | null {
+  if (!lastCapture?.data || !videoId) {
+    return null;
+  }
+  if (!lastCapture.videoId || lastCapture.videoId === videoId) {
+    return lastCapture.data;
+  }
+  return null;
+}
+
+function requestCaptionTrack(): void {
+  const player = moviePlayer();
+  const language =
+    tracksFrom(readPlayerResponse())[0]?.languageCode ?? 'en';
   try {
-    moviePlayer()?.setOption?.('captions', 'track', { languageCode: 'en' });
+    player?.loadModule?.('captions');
+  } catch {
+    // module loader is optional
+  }
+  try {
+    player?.setOption?.('captions', 'track', { languageCode: language });
+    return;
   } catch {
     document.querySelector<HTMLButtonElement>('.ytp-subtitles-button')?.click();
   }
-  while (Date.now() - start < timeoutMs) {
-    if (lastCapture && lastCapture.videoId === videoId) {
-      return lastCapture.data;
+}
+
+function hideCaptionTrack(): void {
+  try {
+    moviePlayer()?.setOption?.('captions', 'track', {});
+  } catch {
+    const button = document.querySelector<HTMLButtonElement>('.ytp-subtitles-button');
+    if (button?.getAttribute('aria-pressed') === 'true') {
+      button.click();
     }
-    await new Promise((resolve) => window.setTimeout(resolve, 200));
   }
-  return lastCapture?.data ?? null;
+}
+
+async function waitForCapture(videoId: string, timeoutMs: number): Promise<unknown> {
+  const existing = captureMatchesVideo(videoId);
+  if (existing) {
+    return existing;
+  }
+  const start = Date.now();
+  const keepCaptionsOn = captionsAlreadyVisible();
+  let lastRequestAt = 0;
+  while (Date.now() - start < timeoutMs) {
+    const hit = captureMatchesVideo(videoId);
+    if (hit) {
+      if (!keepCaptionsOn) {
+        hideCaptionTrack();
+      }
+      return hit;
+    }
+    if (Date.now() - lastRequestAt > 400) {
+      requestCaptionTrack();
+      lastRequestAt = Date.now();
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 150));
+  }
+  if (!keepCaptionsOn) {
+    hideCaptionTrack();
+  }
+  return captureMatchesVideo(videoId);
 }
 
 async function acquireFallbackTranscript(): Promise<unknown> {
   const videoId = parseVideoId(location.href) ?? '';
-  const captured = await waitForCapture(videoId, 5000);
+  const captured = await waitForCapture(videoId, 8000);
   if (captured) {
     return captured;
   }
@@ -303,14 +426,28 @@ export default defineContentScript({
     });
 
     let lastId = parseVideoId(location.href);
+    let lastTrackKey = '';
     const emitNav = () => {
       const id = parseVideoId(location.href);
       if (id && id !== lastId) {
         lastId = id;
+        lastCapture = null;
+        lastTrackKey = '';
         emitBridgeEvent('VIDEO_ID_CHANGED', id, null);
+      }
+      const snapshot = snapshotFrom(readPlayerResponse());
+      const videoId = snapshot.videoId ?? id;
+      if (videoId && snapshot.tracks.length > 0) {
+        const key = `${videoId}:${snapshot.tracks.length}`;
+        if (key !== lastTrackKey) {
+          lastTrackKey = key;
+          emitBridgeEvent('RAW_TRACKS_RESOLVED', videoId, {
+            count: snapshot.tracks.length,
+          });
+        }
       }
     };
     document.addEventListener('yt-navigate-finish', emitNav);
-    window.setInterval(emitNav, 1000);
+    window.setInterval(emitNav, 500);
   },
 });

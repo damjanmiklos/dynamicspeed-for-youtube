@@ -287,6 +287,9 @@ export function createPlaybackController(hooks: ControllerHooks) {
         commitRate(rate);
       }
     },
+    getTranscriptStatus() {
+      return transcriptStatus;
+    },
     getPageState(): PageState {
       const current = resolved();
       const meta = hooks.getChannel();

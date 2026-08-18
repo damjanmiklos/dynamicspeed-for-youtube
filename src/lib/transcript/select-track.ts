@@ -64,6 +64,15 @@ export function forceJson3Url(baseUrl: string, origin = 'https://www.youtube.com
   return safe;
 }
 
+export function videoIdFromTimedTextUrl(raw: string): string | null {
+  const safe = toSafeTimedTextUrl(raw);
+  if (!safe) {
+    return null;
+  }
+  const video = new URL(safe).searchParams.get('v');
+  return video && /^[\w-]{11}$/.test(video) ? video : null;
+}
+
 export function timedTextBelongsToVideo(raw: string, videoId: string): boolean {
   const safe = toSafeTimedTextUrl(raw);
   if (!safe || !videoId) {

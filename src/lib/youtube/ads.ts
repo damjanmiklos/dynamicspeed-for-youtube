@@ -9,7 +9,7 @@ export function isAdShowing(root?: ParentNode | null): boolean {
   return (
     player.classList.contains('ad-showing') ||
     player.classList.contains('ad-interrupting') ||
-    Boolean(player.querySelector('.ytp-ad-player-overlay, .video-ads .ytp-ad-module'))
+    Boolean(player.querySelector('.ytp-ad-player-overlay'))
   );
 }
 

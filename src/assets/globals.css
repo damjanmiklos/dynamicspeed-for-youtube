@@ -42,6 +42,7 @@ input[type='range'] {
   appearance: none;
   width: 100%;
   height: 8px;
+  border: none;
   border-radius: 999px;
   background: linear-gradient(
     to right,
@@ -51,6 +52,14 @@ input[type='range'] {
     #2a2f3a 100%
   );
   outline: none;
+}
+
+/* Gecko paints fill with ::-moz-range-progress. Updating a gradient + CSS
+   variable on every tick is a known source of range-thumb lag in Firefox. */
+@supports (-moz-appearance: none) {
+  input[type='range'] {
+    background: transparent;
+  }
 }
 
 input[type='range']:disabled {

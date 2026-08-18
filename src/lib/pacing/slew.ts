@@ -1,7 +1,7 @@
 import { lerp, smoothstep } from './feel';
 import { INTRO_SLEW_SEC, SEEK_SNAP_SEC } from '../settings/limits';
 
-/** Situational slew: never run this every frame on an already-smooth curve. */
+/** Cap playback-rate change per wall-clock second. */
 
 export function slewStep(
   current: number,
@@ -25,16 +25,21 @@ export function slewStep(
 
 export const RATE_JUMP_EPSILON = 0.08;
 
-/** True when playhead moved farther than one animation frame, i.e. a skip. */
+/**
+ * True when the playhead moved farther than playback can explain.
+ * `expectedDeltaSec` is playbackRate × frame dt (0 while paused).
+ */
 export function isSeekJump(
   previousTime: number,
   nextTime: number,
   thresholdSec = SEEK_SNAP_SEC,
+  expectedDeltaSec = 0,
 ): boolean {
   if (!Number.isFinite(previousTime) || !Number.isFinite(nextTime)) {
     return false;
   }
-  return Math.abs(nextTime - previousTime) > thresholdSec;
+  const expected = Number.isFinite(expectedDeltaSec) ? expectedDeltaSec : 0;
+  return Math.abs(nextTime - previousTime - expected) > thresholdSec;
 }
 
 export function introRate(

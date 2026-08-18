@@ -12,6 +12,8 @@ import {
 import { acquireTranscript } from '../lib/youtube/acquire';
 import { createPlaybackController } from '../lib/youtube/controller';
 import { parseVideoId, YOUTUBE_MATCHES } from '../lib/youtube/video-id';
+import { buildTranscriptExport } from '../lib/transcript/export';
+import { readVisibleWatchTitle } from '../lib/youtube/watch-meta';
 import type { PlayerSnapshot } from '../lib/bridge/protocol';
 
 export default defineContentScript({
@@ -22,13 +24,17 @@ export default defineContentScript({
     let loadGeneration = 0;
     let appliedSettings: DynamicSpeedSettings | null = null;
     const controller = createPlaybackController({
-      getChannel: () => ({
-        channelId: snapshot?.channelId ?? null,
-        channelName: snapshot?.channelName ?? null,
-        title: snapshot?.title ?? document.title,
-        isLive: Boolean(snapshot?.isLive),
-        isMusic: Boolean(snapshot?.isMusic),
-      }),
+      getChannel: () => {
+        const videoId = parseVideoId(location.href);
+        const snapshotMatches = snapshot?.videoId === videoId;
+        return {
+          channelId: snapshotMatches ? snapshot?.channelId ?? null : null,
+          channelName: snapshotMatches ? snapshot?.channelName ?? null : null,
+          title: readVisibleWatchTitle() ?? (snapshotMatches ? snapshot?.title ?? null : null),
+          isLive: snapshotMatches ? Boolean(snapshot?.isLive) : false,
+          isMusic: snapshotMatches ? Boolean(snapshot?.isMusic) : false,
+        };
+      },
     });
 
     const loadForCurrentVideo = async () => {
@@ -128,6 +134,20 @@ export default defineContentScript({
           source: RUNTIME_SOURCE,
           type: 'PAGE_STATE',
           state: controller.getPageState(),
+        } satisfies RuntimeMessage);
+        return true;
+      }
+      if (message.type === 'GET_TRANSCRIPT') {
+        const state = controller.getPageState();
+        sendResponse({
+          source: RUNTIME_SOURCE,
+          type: 'TRANSCRIPT',
+          transcript: buildTranscriptExport({
+            videoId: state.videoId,
+            title: state.title,
+            transcriptStatus: state.transcriptStatus,
+            tokens: controller.getTokens(),
+          }),
         } satisfies RuntimeMessage);
         return true;
       }

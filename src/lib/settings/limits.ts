@@ -1,5 +1,5 @@
 export const LIMITS = {
-  targetWpm: { min: 80, max: 400, step: 1, decimals: 0 },
+  targetWpm: { min: 80, max: 500, step: 1, decimals: 0 },
   minSpeed: { min: 0.25, max: 4, step: 0.05, decimals: 2 },
   maxSpeed: { min: 0.5, max: 5, step: 0.05, decimals: 2 },
   fallbackSpeed: { min: 0.25, max: 5, step: 0.05, decimals: 2 },
@@ -17,5 +17,5 @@ export const LIMITS = {
 export const INTRO_SLEW_SEC = 2;
 /** How quickly playback eases to the fallback speed when there is no transcript. */
 export const FALLBACK_SLEW_SEC = 0.35;
-/** Video-time jump treated as a skip. Rate snaps instead of interpolating. */
+/** Unexplained playhead jump vs expected playbackRate × dt. Rate snaps. */
 export const SEEK_SNAP_SEC = 0.35;

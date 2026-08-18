@@ -4,6 +4,7 @@ import {
   tokensFromTimedWords,
   type AlignOptions,
 } from './align';
+import { deoverlapTokenTimes, stripRollingCueDuplicates } from './deoverlap';
 import { MAX_CAPTION_BYTES, MAX_JSON3_EVENTS, MAX_TOKENS, MAX_WORD_CHARS } from './limits';
 import type { Json3Document, Json3Event, TimedCue, WordToken } from './types';
 
@@ -96,12 +97,17 @@ export function parseJson3(
       cues.push(cue);
     }
   }
+  cues.sort((a, b) => a.t0 - b.t0 || a.t1 - b.t1);
+  stripRollingCueDuplicates(cues);
   assignEndTimes(cues);
 
   const tokens: WordToken[] = [];
   for (const cue of cues) {
     if (tokens.length >= MAX_TOKENS) {
       break;
+    }
+    if (cue.words.length === 0 && !isMetaText(cue.rawText)) {
+      continue;
     }
     if (isMetaText(cue.rawText)) {
       tokens.push({
@@ -134,8 +140,8 @@ export function parseJson3(
     }
   }
 
-  tokens.sort((a, b) => a.t0 - b.t0);
-  return tokens.slice(0, MAX_TOKENS);
+  tokens.sort((a, b) => a.t0 - b.t0 || a.t1 - b.t1);
+  return deoverlapTokenTimes(tokens).slice(0, MAX_TOKENS);
 }
 
 export function parseJson3Safe(

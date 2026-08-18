@@ -40,6 +40,11 @@ describe('seek jumps', () => {
     expect(isSeekJump(10, 5)).toBe(true);
     expect(isSeekJump(10, 10.05)).toBe(false);
   });
+
+  it('does not treat high-rate playback as a seek', () => {
+    expect(isSeekJump(10, 10.6, 0.35, 3 * 0.2)).toBe(false);
+    expect(isSeekJump(10, 20, 0.35, 3 * 0.016)).toBe(true);
+  });
 });
 
 describe('intro interpolation', () => {

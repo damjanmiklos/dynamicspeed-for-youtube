@@ -36,7 +36,6 @@ export function createPlaybackController(hooks: ControllerHooks) {
   let tokens: WordToken[] = [];
   let curve: SpeedCurve | null = null;
   let applied = 1;
-  let slewing = false;
   let overrideUntil = 0;
   let forceHold: number | null = null;
   let lastVideoTime = 0;
@@ -126,7 +125,6 @@ export function createPlaybackController(hooks: ControllerHooks) {
       return;
     }
     overrideUntil = performance.now() + current.manualOverrideTimeoutSec * 1000;
-    slewing = false;
   }
 
   function automationOwnsRate(current: ResolvedPlaybackSettings): boolean {
@@ -158,7 +156,6 @@ export function createPlaybackController(hooks: ControllerHooks) {
       return;
     }
     applied = rateAt(curve, video.currentTime);
-    slewing = false;
     cancelIntro();
     lastVideoTime = video.currentTime;
     ownRate(applied);
@@ -230,12 +227,18 @@ export function createPlaybackController(hooks: ControllerHooks) {
     }
 
     const desired = rateAt(curve, video.currentTime);
-    const skipped = isSeekJump(lastVideoTime, video.currentTime, SEEK_SNAP_SEC);
+    const expectedDelta =
+      video.paused || video.ended ? 0 : video.playbackRate * dt;
+    const skipped = isSeekJump(
+      lastVideoTime,
+      video.currentTime,
+      SEEK_SNAP_SEC,
+      expectedDelta,
+    );
     lastVideoTime = video.currentTime;
 
     if (skipped) {
       applied = desired;
-      slewing = false;
       cancelIntro();
     } else if (introActive) {
       const elapsed = (now - introStartedAt) / 1000;
@@ -244,14 +247,8 @@ export function createPlaybackController(hooks: ControllerHooks) {
         cancelIntro();
         applied = desired;
       }
-    } else if (slewing) {
-      applied = slewStep(applied, desired, dt, current.slewRateLimit);
-      if (Math.abs(applied - desired) < 0.01) {
-        applied = desired;
-        slewing = false;
-      }
     } else {
-      applied = desired;
+      applied = slewStep(applied, desired, dt, current.slewRateLimit);
     }
 
     ownRate(applied);
@@ -350,9 +347,6 @@ export function createPlaybackController(hooks: ControllerHooks) {
       rebuildCurve(video?.duration);
       if (recalculate) {
         overrideUntil = 0;
-        if (curve && !introActive) {
-          slewing = true;
-        }
       }
     },
     setTokens(next: WordToken[], status: string) {
@@ -364,11 +358,8 @@ export function createPlaybackController(hooks: ControllerHooks) {
         introFrom = applied;
         introStartedAt = performance.now();
         introActive = true;
-        slewing = false;
       } else if (!curve) {
         cancelIntro();
-      } else if (hadCurve) {
-        slewing = true;
       }
     },
     setTranscriptStatus(status: string) {
@@ -376,9 +367,6 @@ export function createPlaybackController(hooks: ControllerHooks) {
     },
     setChipClickHandler(handler: () => void) {
       onChipClick = handler;
-    },
-    beginSlew() {
-      slewing = true;
     },
     forceRate(rate: number | null) {
       forceHold = rate;
@@ -388,6 +376,9 @@ export function createPlaybackController(hooks: ControllerHooks) {
     },
     getTranscriptStatus() {
       return transcriptStatus;
+    },
+    getTokens() {
+      return tokens.slice();
     },
     getPageState(): PageState {
       const current = resolved();

@@ -73,4 +73,36 @@ describe('parseJson3', () => {
     );
     expect(tokens.map((token) => token.text)).toEqual(['Hi']);
   });
+
+  it('drops the repeated tail of rolling YouTube caption windows', () => {
+    const json = JSON.parse(readFileSync(join(dir, 'rolling-window.json'), 'utf8'));
+    const tokens = parseJson3(json, { syllableWeighting: false });
+    expect(tokens.map((token) => token.text)).toEqual([
+      'hello',
+      'world',
+      'how',
+      'are',
+      'you',
+      'doing',
+      'today',
+    ]);
+  });
+
+  it('keeps distinct overlapping lines but makes their times sequential', () => {
+    const json = JSON.parse(readFileSync(join(dir, 'interleaved-lines.json'), 'utf8'));
+    const tokens = parseJson3(json, { syllableWeighting: false }).filter(
+      (token) => !token.meta,
+    );
+    expect(tokens.map((token) => token.text)).toEqual([
+      'rover',
+      'rigid',
+      'sends',
+      'desert',
+      'us',
+    ]);
+    for (let i = 0; i < tokens.length - 1; i += 1) {
+      expect(tokens[i].t1).toBeLessThanOrEqual(tokens[i + 1].t0 + 1e-9);
+      expect(tokens[i].t1).toBeGreaterThan(tokens[i].t0);
+    }
+  });
 });

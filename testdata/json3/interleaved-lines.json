@@ -1,0 +1,21 @@
+{
+  "events": [
+    {
+      "tStartMs": 4344,
+      "dDurationMs": 1536,
+      "segs": [
+        { "utf8": "rover " },
+        { "tOffsetMs": 512, "utf8": "sends " },
+        { "tOffsetMs": 768, "utf8": "us" }
+      ]
+    },
+    {
+      "tStartMs": 4504,
+      "dDurationMs": 1150,
+      "segs": [
+        { "utf8": "rigid " },
+        { "tOffsetMs": 575, "utf8": "desert" }
+      ]
+    }
+  ]
+}

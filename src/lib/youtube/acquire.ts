@@ -102,7 +102,7 @@ async function readSnapshot(pageVideoId: string): Promise<PlayerSnapshot> {
       3000,
     ).catch(() => null);
     snapshot = isPlayerSnapshot(rawSnapshot) ? rawSnapshot : empty;
-    if (snapshot.tracks.length > 0) {
+    if (snapshot.videoId === pageVideoId && snapshot.tracks.length > 0) {
       return snapshot;
     }
     await sleep(250);
@@ -118,12 +118,15 @@ function isPlayerSnapshot(value: unknown): value is PlayerSnapshot {
   if (!Array.isArray(snapshot.tracks) || snapshot.tracks.length > MAX_CAPTION_TRACKS) {
     return false;
   }
-  return snapshot.tracks.every(
-    (track) =>
-      track &&
-      typeof track === 'object' &&
-      typeof track.baseUrl === 'string' &&
-      typeof track.languageCode === 'string',
+  return (
+    (snapshot.videoId === null || typeof snapshot.videoId === 'string') &&
+    snapshot.tracks.every(
+      (track) =>
+        track &&
+        typeof track === 'object' &&
+        typeof track.baseUrl === 'string' &&
+        typeof track.languageCode === 'string',
+    )
   );
 }
 

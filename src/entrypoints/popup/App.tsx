@@ -10,10 +10,40 @@ import { LIMITS } from '../../lib/settings/limits';
 import {
   EMPTY_PAGE_STATE,
   RUNTIME_SOURCE,
+  isRuntimeMessage,
   type PageState,
   type RuntimeMessage,
 } from '../../lib/messaging/protocol';
 import { isYouTubeTabUrl } from '../../lib/youtube/video-id';
+import { transcriptDownloadName } from '../../lib/transcript/export';
+
+async function exportCurrentTranscript(): Promise<void> {
+  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+  const tab = tabs[0];
+  if (!tab?.id || !isYouTubeTabUrl(tab.url)) {
+    return;
+  }
+  try {
+    const response = (await browser.tabs.sendMessage(tab.id, {
+      source: RUNTIME_SOURCE,
+      type: 'GET_TRANSCRIPT',
+    } satisfies RuntimeMessage)) as RuntimeMessage;
+    if (!isRuntimeMessage(response) || response.type !== 'TRANSCRIPT') {
+      return;
+    }
+    const blob = new Blob([JSON.stringify(response.transcript, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = transcriptDownloadName(response.transcript.videoId);
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    // Tab has no content script or captions are not ready.
+  }
+}
 
 async function queryPageState(): Promise<PageState> {
   const tabs = await browser.tabs.query({ active: true, currentWindow: true });
@@ -83,9 +113,22 @@ export function PopupApp() {
 
       {page.isYouTube ? (
         <div className="mb-2 rounded-lg border border-ds-border bg-ds-surface px-2.5 py-1.5">
-          <div className="text-[11px] text-ds-muted">Now playing</div>
-          <div className="truncate text-sm font-medium leading-tight">
-            {page.title ?? 'YouTube'}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[11px] text-ds-muted">Now playing</div>
+              <div className="truncate text-sm font-medium leading-tight">
+                {page.title ?? 'YouTube'}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="shrink-0 rounded-md border border-ds-border px-1.5 py-0.5 text-[10px] text-ds-muted hover:bg-ds-surface-2 hover:text-ds-text disabled:opacity-40"
+              title="Download the timed transcript DynamicSpeed is using"
+              disabled={!page.hasTranscript}
+              onClick={() => void exportCurrentTranscript()}
+            >
+              Export transcript
+            </button>
           </div>
           <div className="mt-1 flex items-center justify-between text-sm">
             <span className="font-mono text-ds-accent">
@@ -113,18 +156,20 @@ export function PopupApp() {
           onChange={(targetWpm) => void update({ targetWpm })}
           unit=" WPM"
         />
-        <FeelSlider
-          compact
-          label="Feel"
-          hint={
-            settings.customDynamicsUnlocked
-              ? 'Custom engine values unlocked'
-              : 'How quickly speed may change'
-          }
-          value={settings.responsiveness}
-          disabled={settings.customDynamicsUnlocked}
-          onChange={(responsiveness) => void update({ responsiveness })}
-        />
+        <div className={settings.customDynamicsUnlocked ? 'opacity-60' : undefined}>
+          <FeelSlider
+            compact
+            label="Feel"
+            hint={
+              settings.customDynamicsUnlocked
+                ? 'Custom engine values unlocked'
+                : 'How quickly speed may change'
+            }
+            value={settings.responsiveness}
+            disabled={settings.customDynamicsUnlocked}
+            onChange={(responsiveness) => void update({ responsiveness })}
+          />
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <SliderField
             compact

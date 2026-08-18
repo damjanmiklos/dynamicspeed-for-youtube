@@ -15,7 +15,7 @@ export function Toggle({ checked, onChange, label, disabled }: Props) {
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
         checked ? 'bg-ds-accent' : 'bg-ds-border'
-      } ${disabled ? 'opacity-40' : ''}`}
+      } ${disabled ? 'cursor-not-allowed' : ''}`}
     >
       <span className="sr-only">{label}</span>
       <span

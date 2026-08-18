@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { browser } from 'wxt/browser';
+import { useEffect, useMemo, useState } from 'react';
 import { FeelSlider } from '../../ui/components/FeelSlider';
 import { SliderField } from '../../ui/components/SliderField';
 import { SelectField } from '../../ui/components/SelectField';
@@ -8,7 +9,13 @@ import { InfoTip } from '../../ui/components/InfoTip';
 import { SETTINGS_HELP, type SettingHelp } from '../../ui/settings-help';
 import { useSettings } from '../../ui/hooks/useSettings';
 import { resetSettings } from '../../lib/settings/storage';
-import { clearTranscriptCache } from '../../lib/youtube/cache';
+import { TRANSCRIPT_CACHE_KEY } from '../../lib/settings/schema';
+import {
+  clearTranscriptCache,
+  formatCacheBytes,
+  measureTranscriptCacheUsage,
+  pruneExpiredTranscriptCache,
+} from '../../lib/youtube/cache';
 import { resolveDynamics } from '../../lib/pacing/feel';
 import { LIMITS } from '../../lib/settings/limits';
 import { CAPTION_LANGUAGES } from '../../lib/settings/caption-languages';
@@ -32,14 +39,21 @@ function Row({
   hint,
   help,
   children,
+  inactive = false,
 }: {
   title: string;
   hint: string;
   help: SettingHelp;
   children: React.ReactNode;
+  inactive?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-ds-border py-5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      className={`flex flex-col gap-3 border-b border-ds-border py-5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between ${
+        inactive ? 'opacity-60' : ''
+      }`}
+      aria-disabled={inactive || undefined}
+    >
       <div className="max-w-xl">
         <div className="flex items-center">
           <div className="text-sm font-medium">{title}</div>
@@ -56,7 +70,41 @@ export function OptionsApp() {
   const { settings, ready, update } = useSettings();
   const [section, setSection] = useState<NavId>('general');
   const [importError, setImportError] = useState<string | null>(null);
+  const [cacheUsage, setCacheUsage] = useState<{ bytes: number; videos: number } | null>(
+    null,
+  );
   const dynamics = useMemo(() => resolveDynamics(settings), [settings]);
+
+  useEffect(() => {
+    if (section !== 'privacy') {
+      return;
+    }
+    let cancelled = false;
+    const refresh = () => {
+      void measureTranscriptCacheUsage().then((usage) => {
+        if (!cancelled) {
+          setCacheUsage(usage);
+        }
+      });
+    };
+    refresh();
+    const onChanged = (
+      changes: Record<string, unknown>,
+      area?: string,
+    ) => {
+      if (area && area !== 'local') {
+        return;
+      }
+      if (TRANSCRIPT_CACHE_KEY in changes) {
+        refresh();
+      }
+    };
+    browser.storage.onChanged.addListener(onChanged);
+    return () => {
+      cancelled = true;
+      browser.storage.onChanged.removeListener(onChanged);
+    };
+  }, [section]);
 
   if (!ready) {
     return <div className="p-10 text-ds-muted">Loading settings…</div>;
@@ -184,6 +232,7 @@ export function OptionsApp() {
                 title="Responsiveness"
                 hint="Low is molasses-smooth. High reacts to incoming speech sooner. Unlocking custom engine sliders turns this into a display-only Custom mode."
                 help={SETTINGS_HELP.responsiveness}
+                inactive={settings.customDynamicsUnlocked}
               >
                 <FeelSlider
                   value={settings.responsiveness}
@@ -311,6 +360,7 @@ export function OptionsApp() {
                 title="Gaussian window (σ)"
                 hint={`Seconds of zero-phase smoothing. Current feel pack: ${dynamics.gaussianSigma.toFixed(1)}s.`}
                 help={SETTINGS_HELP.gaussianSigma}
+                inactive={!settings.customDynamicsUnlocked}
               >
                 <SliderField
                   label=""
@@ -318,8 +368,13 @@ export function OptionsApp() {
                   max={LIMITS.gaussianSigma.max}
                   step={LIMITS.gaussianSigma.step}
                   decimals={LIMITS.gaussianSigma.decimals}
-                  value={settings.gaussianSigma}
+                  value={
+                    settings.customDynamicsUnlocked
+                      ? settings.gaussianSigma
+                      : dynamics.gaussianSigma
+                  }
                   unit="s"
+                  disabled={!settings.customDynamicsUnlocked}
                   onChange={(gaussianSigma) => void update({ gaussianSigma })}
                 />
               </Row>
@@ -327,6 +382,7 @@ export function OptionsApp() {
                 title="Median window"
                 hint={`Strips caption jitter. Current feel pack: ${dynamics.medianWindowSec.toFixed(1)}s.`}
                 help={SETTINGS_HELP.medianWindow}
+                inactive={!settings.customDynamicsUnlocked}
               >
                 <SliderField
                   label=""
@@ -334,15 +390,21 @@ export function OptionsApp() {
                   max={LIMITS.medianWindowSec.max}
                   step={LIMITS.medianWindowSec.step}
                   decimals={LIMITS.medianWindowSec.decimals}
-                  value={settings.medianWindowSec}
+                  value={
+                    settings.customDynamicsUnlocked
+                      ? settings.medianWindowSec
+                      : dynamics.medianWindowSec
+                  }
                   unit="s"
+                  disabled={!settings.customDynamicsUnlocked}
                   onChange={(medianWindowSec) => void update({ medianWindowSec })}
                 />
               </Row>
               <Row
                 title="Slew limit"
-                hint={`Max speed change per second after setting changes. Seeks snap instantly. Current feel pack: ${dynamics.slewRateLimit.toFixed(2)}×/s.`}
+                hint={`Max playback-rate change per second. Seeks snap instantly. Current feel pack: ${dynamics.slewRateLimit.toFixed(2)}×/s.`}
                 help={SETTINGS_HELP.slewLimit}
+                inactive={!settings.customDynamicsUnlocked}
               >
                 <SliderField
                   label=""
@@ -350,8 +412,13 @@ export function OptionsApp() {
                   max={LIMITS.slewRateLimit.max}
                   step={LIMITS.slewRateLimit.step}
                   decimals={LIMITS.slewRateLimit.decimals}
-                  value={settings.slewRateLimit}
+                  value={
+                    settings.customDynamicsUnlocked
+                      ? settings.slewRateLimit
+                      : dynamics.slewRateLimit
+                  }
                   unit="×/s"
+                  disabled={!settings.customDynamicsUnlocked}
                   onChange={(slewRateLimit) => void update({ slewRateLimit })}
                 />
               </Row>
@@ -406,10 +473,12 @@ export function OptionsApp() {
                 title="Treat [Music] as b-roll"
                 hint="Caption tags like [Music] or [Applause] are never counted as spoken WPM."
                 help={SETTINGS_HELP.treatMusic}
+                inactive={!settings.bRollAcceleration}
               >
                 <div className="flex justify-end">
                   <Toggle
                     checked={settings.treatMusicAsBRoll}
+                    disabled={!settings.bRollAcceleration}
                     onChange={(treatMusicAsBRoll) => void update({ treatMusicAsBRoll })}
                   />
                 </div>
@@ -584,22 +653,29 @@ export function OptionsApp() {
                   />
                 </div>
               </Row>
-              <Row title="Chip decimals" hint="1.5× vs 1.47×." help={SETTINGS_HELP.chipDecimals}>
+              <Row title="Chip decimals" hint="1.5× vs 1.47×." help={SETTINGS_HELP.chipDecimals} inactive={!settings.showPlayerChip}>
                 <SliderField
                   label=""
                   min={LIMITS.chipDecimalPlaces.min}
                   max={LIMITS.chipDecimalPlaces.max}
                   step={LIMITS.chipDecimalPlaces.step}
                   value={settings.chipDecimalPlaces}
+                  disabled={!settings.showPlayerChip}
                   onChange={(chipDecimalPlaces) =>
                     void update({ chipDecimalPlaces: chipDecimalPlaces as 1 | 2 })
                   }
                 />
               </Row>
-              <Row title="WPM in tooltip" hint="Show estimated spoken WPM when hovering the chip." help={SETTINGS_HELP.wpmTooltip}>
+              <Row
+                title="WPM in tooltip"
+                hint="Show estimated spoken WPM when hovering the chip."
+                help={SETTINGS_HELP.wpmTooltip}
+                inactive={!settings.showPlayerChip}
+              >
                 <div className="flex justify-end">
                   <Toggle
                     checked={settings.showWpmInTooltip}
+                    disabled={!settings.showPlayerChip}
                     onChange={(showWpmInTooltip) => void update({ showWpmInTooltip })}
                   />
                 </div>
@@ -654,15 +730,45 @@ export function OptionsApp() {
                 already does, parsed locally, and cached as compact word timings on this
                 device only. There is no account, no analytics, and no remote API.
               </p>
-              <div className="mt-6 flex items-center">
+              <div className="mt-6 flex flex-wrap items-center gap-3">
                 <button
                   className="rounded-lg border border-ds-border px-4 py-2 text-sm"
-                  onClick={() => void clearTranscriptCache()}
+                  onClick={() => {
+                    void clearTranscriptCache().then(() =>
+                      setCacheUsage({ bytes: 0, videos: 0 }),
+                    );
+                  }}
                 >
                   Clear caption cache
                 </button>
+                <span className="text-sm text-ds-muted">
+                  {cacheUsage == null
+                    ? 'Measuring…'
+                    : `Using ${formatCacheBytes(cacheUsage.bytes)}${
+                        cacheUsage.videos === 0
+                          ? ''
+                          : ` · ${cacheUsage.videos} video${cacheUsage.videos === 1 ? '' : 's'}`
+                      }`}
+                </span>
                 <InfoTip help={SETTINGS_HELP.captionCache} />
               </div>
+              <Row
+                title="Delete cache after a week"
+                hint="Remove caption timings for videos you have not watched in the last 7 days."
+                help={SETTINGS_HELP.expireCaptionCache}
+              >
+                <div className="flex justify-end">
+                  <Toggle
+                    checked={settings.expireCaptionCacheAfterWeek}
+                    onChange={(expireCaptionCacheAfterWeek) => {
+                      void update({ expireCaptionCacheAfterWeek });
+                      if (expireCaptionCacheAfterWeek) {
+                        void pruneExpiredTranscriptCache(true);
+                      }
+                    }}
+                  />
+                </div>
+              </Row>
               <div className="mt-8">
                 <SupportLink />
               </div>

@@ -3,6 +3,10 @@ import type { CaptionTrackPayload, PlayerSnapshot } from '../lib/bridge/protocol
 import { toSafeTimedTextUrl, videoIdFromTimedTextUrl } from '../lib/transcript/select-track';
 import { MAX_CAPTION_BYTES } from '../lib/transcript/limits';
 import { parseVideoId, isShortsPath, YOUTUBE_MATCHES } from '../lib/youtube/video-id';
+import {
+  playerResponseBelongsToVideo,
+  readVisibleWatchTitle,
+} from '../lib/youtube/watch-meta';
 
 type PlayerResponse = {
   videoDetails?: {
@@ -38,8 +42,6 @@ type YTPlayer = {
   getPlayerResponse?: () => PlayerResponse;
   getVideoData?: () => { video_id?: string; title?: string; author?: string };
   getDuration?: () => number;
-  loadModule?: (module: string) => void;
-  setOption?: (module: string, option: string, value: unknown) => void;
 };
 
 declare global {
@@ -54,15 +56,29 @@ function moviePlayer(): YTPlayer | null {
 }
 
 function readPlayerResponse(): PlayerResponse | null {
+  const videoId = parseVideoId(location.href);
   try {
     const fromPlayer = moviePlayer()?.getPlayerResponse?.();
-    if (fromPlayer) {
-      return fromPlayer;
+    if (playerResponseBelongsToVideo(fromPlayer, videoId)) {
+      return fromPlayer ?? null;
     }
   } catch {
     // player not ready
   }
-  return window.ytInitialPlayerResponse ?? null;
+  const initial = window.ytInitialPlayerResponse;
+  if (playerResponseBelongsToVideo(initial, videoId)) {
+    return initial ?? null;
+  }
+  return null;
+}
+
+function titleFromPlayer(): string | null {
+  try {
+    const title = moviePlayer()?.getVideoData?.()?.title?.trim();
+    return title || null;
+  } catch {
+    return null;
+  }
 }
 
 function tracksFrom(response: PlayerResponse | null): CaptionTrackPayload[] {
@@ -194,19 +210,20 @@ async function innertubePlayer(videoId: string, client: 'WEB' | 'ANDROID'): Prom
 
 function snapshotFrom(response: PlayerResponse | null): PlayerSnapshot {
   const href = location.href;
-  const details = response?.videoDetails;
-  const micro = response?.microformat?.playerMicroformatRenderer;
-  const videoId = parseVideoId(href) ?? details?.videoId ?? null;
+  const videoId = parseVideoId(href);
+  const matched = playerResponseBelongsToVideo(response, videoId) ? response : null;
+  const details = matched?.videoDetails;
+  const micro = matched?.microformat?.playerMicroformatRenderer;
   return {
     videoId,
-    title: details?.title ?? document.title,
+    title: details?.title ?? titleFromPlayer() ?? readVisibleWatchTitle(),
     channelId: details?.channelId ?? null,
     channelName: details?.author ?? micro?.ownerChannelName ?? null,
     duration: micro?.lengthSeconds ? Number(micro.lengthSeconds) : moviePlayer()?.getDuration?.() ?? null,
     isLive: Boolean(details?.isLiveContent || micro?.liveBroadcastDetails?.isLiveNow),
     isShorts: isShortsPath(href),
     isMusic: (micro?.category ?? '').toLowerCase() === 'music',
-    tracks: tracksFrom(response),
+    tracks: tracksFrom(matched),
   };
 }
 
@@ -337,15 +354,6 @@ function installTimedtextObserver(): void {
   };
 }
 
-function captionsAlreadyVisible(): boolean {
-  const button = document.querySelector<HTMLButtonElement>('.ytp-subtitles-button');
-  const label = button?.getAttribute('aria-label') ?? '';
-  return (
-    button?.getAttribute('aria-pressed') === 'true' &&
-    !/unavailable/i.test(label)
-  );
-}
-
 function captureMatchesVideo(videoId: string): unknown | null {
   if (!lastCapture?.data || !videoId) {
     return null;
@@ -356,58 +364,22 @@ function captureMatchesVideo(videoId: string): unknown | null {
   return null;
 }
 
-function requestCaptionTrack(): void {
-  const player = moviePlayer();
-  const language =
-    tracksFrom(readPlayerResponse())[0]?.languageCode ?? 'en';
-  try {
-    player?.loadModule?.('captions');
-  } catch {
-    // module loader is optional
-  }
-  try {
-    player?.setOption?.('captions', 'track', { languageCode: language });
-    return;
-  } catch {
-    document.querySelector<HTMLButtonElement>('.ytp-subtitles-button')?.click();
-  }
-}
-
-function hideCaptionTrack(): void {
-  try {
-    moviePlayer()?.setOption?.('captions', 'track', {});
-  } catch {
-    const button = document.querySelector<HTMLButtonElement>('.ytp-subtitles-button');
-    if (button?.getAttribute('aria-pressed') === 'true') {
-      button.click();
-    }
-  }
-}
-
-async function waitForCapture(videoId: string, timeoutMs: number): Promise<unknown> {
+/** Use a timedtext body YouTube already fetched. Never toggle the CC button. */
+async function waitForPassiveCapture(
+  videoId: string,
+  timeoutMs: number,
+): Promise<unknown | null> {
   const existing = captureMatchesVideo(videoId);
   if (existing) {
     return existing;
   }
   const start = Date.now();
-  const keepCaptionsOn = captionsAlreadyVisible();
-  let lastRequestAt = 0;
   while (Date.now() - start < timeoutMs) {
     const hit = captureMatchesVideo(videoId);
     if (hit) {
-      if (!keepCaptionsOn) {
-        hideCaptionTrack();
-      }
       return hit;
     }
-    if (Date.now() - lastRequestAt > 400) {
-      requestCaptionTrack();
-      lastRequestAt = Date.now();
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, 150));
-  }
-  if (!keepCaptionsOn) {
-    hideCaptionTrack();
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
   }
   return captureMatchesVideo(videoId);
 }
@@ -416,7 +388,7 @@ let fallbackInFlight: Promise<unknown> | null = null;
 
 async function acquireFallbackTranscriptNow(): Promise<unknown> {
   const videoId = parseVideoId(location.href) ?? '';
-  const captured = await waitForCapture(videoId, 8000);
+  const captured = await waitForPassiveCapture(videoId, 600);
   if (captured) {
     return captured;
   }

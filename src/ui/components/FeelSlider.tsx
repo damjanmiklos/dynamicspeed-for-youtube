@@ -1,4 +1,5 @@
 import { EditableNumber } from './EditableNumber';
+import { rangeFillStyle } from '../range-fill';
 
 type Props = {
   value: number;
@@ -21,7 +22,7 @@ export function FeelSlider({
   const tone = percent < 40 ? 'smooth' : percent > 60 ? 'snappy' : 'balanced';
 
   return (
-    <div className={`${compact ? 'space-y-1' : 'space-y-2'} ${disabled ? 'opacity-60' : ''}`}>
+    <div className={compact ? 'space-y-1' : 'space-y-2'}>
       <div className="flex items-end justify-between gap-3">
         <div>
           {label ? <div className="text-sm font-medium text-ds-text">{label}</div> : null}
@@ -53,7 +54,7 @@ export function FeelSlider({
         disabled={disabled}
         aria-label={label || 'Feel'}
         aria-valuetext={disabled ? 'Custom' : `${percent}, ${tone}`}
-        style={{ ['--ds-fill' as string]: `${percent}%` }}
+        style={rangeFillStyle(percent)}
         onChange={(event) => onChange(Number(event.target.value) / 100)}
       />
       <div className="flex justify-between text-[10px] uppercase tracking-[0.14em] text-ds-muted">

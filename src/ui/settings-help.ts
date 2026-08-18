@@ -17,7 +17,7 @@ export const SETTINGS_HELP = {
     body: [
       'This is the listening pace you want, in words per minute. DynamicSpeed measures how fast the speaker is talking from caption timings, then sets playback rate ≈ spoken WPM ÷ target WPM (then clamped to Min/Max speed).',
       'Raise the target if you want slow talkers sped up more. Lower it if dense or fast speech still feels rushed. Everyday conversation is often about 150–180 WPM; lectures are slower; auction-style or hyped speech is faster.',
-      'The range is 80–400. Changes apply on the current video immediately, with a short ease-in so the jump is not a hard snap.',
+      'The range is 80–500. Changes apply on the current video immediately, with a short ease-in so the jump is not a hard snap.',
     ],
   },
   minSpeed: {
@@ -47,7 +47,7 @@ export const SETTINGS_HELP = {
   responsiveness: {
     label: 'About Responsiveness',
     body: [
-      'One “feel” control that sets how quickly speed is allowed to change. It does not change Target WPM; it changes how much the speed curve is smoothed and how fast the player may slew after you change settings.',
+      'One “feel” control that sets how quickly speed is allowed to change. It does not change Target WPM; it changes how much the speed curve is smoothed and how fast playback rate may slew toward that curve.',
       'Low is molasses-smooth: a wide Gaussian window (~18 s), a wide median window (~10 s), and a slow slew cap (~0.12× per second). High reacts sooner: tighter windows (~5 s and ~3 s) and a faster slew cap (~0.9× per second).',
       'If you unlock custom dynamics, this slider becomes display-only. The Gaussian, median, and slew sliders on the Pacing engine page then take over.',
     ],
@@ -111,9 +111,9 @@ export const SETTINGS_HELP = {
   slewLimit: {
     label: 'About slew limit',
     body: [
-      'Maximum change in playback rate per second while DynamicSpeed is catching up after you change settings that rebuild the curve, and while easing to the default speed. Skipping in the video snaps to the calculated rate immediately.',
-      'The main speed curve itself is interpolated smoothly (monotone cubic / PCHIP) during normal playback. This cap is the extra “don’t jump” brake when the player has to rejoin the curve after a settings change.',
-      'This slider only applies while custom dynamics are unlocked. Low values feel glued; high values snap to the new rate sooner.',
+      'Maximum change in playback rate per second of real time while DynamicSpeed is automating speed. B-roll, settings changes, and a jump in the talking-rate curve all have to climb or drop through this cap. Skipping in the video still snaps to the calculated rate immediately.',
+      'At 0.51×/s, a move from 1.2× to 3× takes about three and a half seconds. The speed curve can still target max speed as soon as a pause starts; this limit is how fast the player is allowed to get there.',
+      'This slider only applies while custom dynamics are unlocked. Low values feel glued; high values reach the new rate sooner.',
     ],
   },
   minChunk: {
@@ -128,7 +128,7 @@ export const SETTINGS_HELP = {
     label: 'About b-roll acceleration',
     body: [
       'When this is off, a long gap in speech is not treated as “the speaker is slow.” Speed eases between the speech on either side of the gap (PCHIP), so a pause does not slam the rate around.',
-      'When this is on, gaps longer than Long pause — and optional [Music]/[Applause]-style tags — head toward your Maximum speed so visual-only stretches and long silences skip faster.',
+      'When this is on, gaps longer than Long pause — and optional [Music]/[Applause]-style tags — target your Maximum speed so visual-only stretches and long silences skip faster. The slew limit still caps how quickly playback climbs to that max.',
       'Leave it off for interviews and talks where silence is part of the delivery. Turn it on for video essays and explainers that pad with b-roll.',
     ],
   },
@@ -248,7 +248,7 @@ export const SETTINGS_HELP = {
   wpmUpShortcut: {
     label: 'About WPM up',
     body: [
-      'Alt+Shift+W raises Target WPM by 10, clamped to the allowed range (80–400). The speed curve rebuilds immediately on the current video.',
+      'Alt+Shift+W raises Target WPM by 10, clamped to the allowed range (80–500). The speed curve rebuilds immediately on the current video.',
     ],
   },
   wpmDownShortcut: {
@@ -270,6 +270,13 @@ export const SETTINGS_HELP = {
       'Parsed caption timings are stored only in this browser so returning to a video is faster and does not need to re-download the same track.',
       'Nothing in the cache is uploaded. Clearing it does not change settings; it only drops stored timelines. They will be fetched again the next time you watch those videos.',
       'Use this if a video’s speed curve looks stuck on an old caption track after you changed language or YouTube replaced captions.',
+    ],
+  },
+  expireCaptionCache: {
+    label: 'About deleting old cache',
+    body: [
+      'When this is on, cached caption timings for a video are deleted if you have not watched that video in the last 7 days. Opening the video again resets the timer, and the track is fetched again the next time you return after it expires.',
+      'Turn this off if you want cached videos to stay until the cache fills (15 videos or 4 MB) or you clear it yourself. Nothing in the cache is uploaded either way.',
     ],
   },
 } as const satisfies Record<string, SettingHelp>;

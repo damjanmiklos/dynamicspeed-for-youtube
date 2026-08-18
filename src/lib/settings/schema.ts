@@ -62,6 +62,8 @@ export const DynamicSpeedSettingsSchema = z
     showPlayerChip: z.boolean().default(true),
     chipDecimalPlaces: z.number().min(1).max(2).default(2),
     showWpmInTooltip: z.boolean().default(true),
+
+    expireCaptionCacheAfterWeek: z.boolean().default(true),
   })
   .refine((settings) => settings.minSpeed < settings.maxSpeed, {
     message: 'minSpeed must be less than maxSpeed',
@@ -72,5 +74,5 @@ export type ChannelOverride = z.infer<typeof ChannelOverrideSchema>;
 export type DynamicSpeedSettings = z.infer<typeof DynamicSpeedSettingsSchema>;
 
 export const SETTINGS_STORAGE_KEY = 'ds.settings';
-export const TRANSCRIPT_CACHE_KEY = 'ds.transcriptCache.v2';
+export const TRANSCRIPT_CACHE_KEY = 'ds.transcriptCache.v3';
 export const SETTINGS_VERSION = 1;

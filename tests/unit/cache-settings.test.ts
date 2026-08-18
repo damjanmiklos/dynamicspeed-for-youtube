@@ -3,7 +3,11 @@ import {
   evictCache,
   putCacheEntry,
   emptyCache,
+  expireCache,
+  touchCacheEntry,
+  CACHE_MAX_AGE_MS,
   CACHE_MAX_VIDEOS,
+  formatCacheBytes,
 } from '../../src/lib/youtube/cache';
 import { parseSettings } from '../../src/lib/settings/defaults';
 import { DynamicSpeedSettingsSchema } from '../../src/lib/settings/schema';
@@ -67,6 +71,53 @@ describe('transcript LRU cache', () => {
     const evicted = evictCache(store, 2000, 15);
     expect(evicted.entries.length).toBeLessThanOrEqual(1);
   });
+
+  it('formats cache sizes for the privacy page', () => {
+    expect(formatCacheBytes(0)).toBe('0 B');
+    expect(formatCacheBytes(800)).toBe('800 B');
+    expect(formatCacheBytes(1536)).toBe('1.5 KB');
+    expect(formatCacheBytes(12_288)).toBe('12 KB');
+    expect(formatCacheBytes(1.5 * 1024 * 1024)).toBe('1.5 MB');
+  });
+
+  it('drops caption cache older than a week', () => {
+    const now = 1_700_000_000_000;
+    let store = emptyCache();
+    store = putCacheEntry(store, {
+      key: 'old:en:asr',
+      videoId: 'old',
+      language: 'en',
+      trackKind: 'asr',
+      tokens: [{ t0: 0, t1: 1, w: 'hi', s: 1 }],
+      savedAt: now - CACHE_MAX_AGE_MS - 1,
+    });
+    store = putCacheEntry(store, {
+      key: 'fresh:en:asr',
+      videoId: 'fresh',
+      language: 'en',
+      trackKind: 'asr',
+      tokens: [{ t0: 0, t1: 1, w: 'hi', s: 1 }],
+      savedAt: now - CACHE_MAX_AGE_MS + 1,
+    });
+    const expired = expireCache(store, now);
+    expect(expired.entries.map((entry) => entry.videoId)).toEqual(['fresh']);
+  });
+
+  it('keeps a week-old video after it is watched again', () => {
+    const now = 1_700_000_000_000;
+    let store = emptyCache();
+    store = putCacheEntry(store, {
+      key: 'v:en:asr',
+      videoId: 'v',
+      language: 'en',
+      trackKind: 'asr',
+      tokens: [{ t0: 0, t1: 1, w: 'hi', s: 1 }],
+      savedAt: now - CACHE_MAX_AGE_MS - 5_000,
+    });
+    expect(expireCache(store, now).entries).toHaveLength(0);
+    store = touchCacheEntry(store, 'v:en:asr', now);
+    expect(expireCache(store, now).entries).toHaveLength(1);
+  });
 });
 
 describe('compact tokens', () => {
@@ -86,6 +137,7 @@ describe('settings schema', () => {
     const settings = parseSettings({});
     expect(settings.targetWpm).toBe(165);
     expect(settings.fallbackSpeed).toBe(1);
+    expect(settings.expireCaptionCacheAfterWeek).toBe(true);
     expect(settings.minSpeed).toBeLessThan(settings.maxSpeed);
   });
 

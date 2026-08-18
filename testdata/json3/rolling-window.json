@@ -1,0 +1,26 @@
+{
+  "events": [
+    {
+      "tStartMs": 0,
+      "dDurationMs": 4000,
+      "segs": [
+        { "utf8": "hello " },
+        { "tOffsetMs": 500, "utf8": "world " },
+        { "tOffsetMs": 1000, "utf8": "how " },
+        { "tOffsetMs": 1500, "utf8": "are " },
+        { "tOffsetMs": 2000, "utf8": "you" }
+      ]
+    },
+    {
+      "tStartMs": 2000,
+      "dDurationMs": 4000,
+      "segs": [
+        { "utf8": "how " },
+        { "tOffsetMs": 500, "utf8": "are " },
+        { "tOffsetMs": 1000, "utf8": "you " },
+        { "tOffsetMs": 1500, "utf8": "doing " },
+        { "tOffsetMs": 2000, "utf8": "today" }
+      ]
+    }
+  ]
+}

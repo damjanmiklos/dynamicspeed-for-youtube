@@ -1,4 +1,5 @@
 import { EditableNumber } from './EditableNumber';
+import { rangeFillStyle } from '../range-fill';
 
 type Props = {
   label: string;
@@ -10,6 +11,7 @@ type Props = {
   unit?: string;
   decimals?: number;
   compact?: boolean;
+  disabled?: boolean;
   onChange: (value: number) => void;
 };
 
@@ -23,6 +25,7 @@ export function SliderField({
   unit = '',
   decimals = 0,
   compact = false,
+  disabled = false,
   onChange,
 }: Props) {
   return (
@@ -39,6 +42,7 @@ export function SliderField({
           step={step}
           decimals={decimals}
           unit={unit}
+          disabled={disabled}
           onChange={onChange}
         />
       </div>
@@ -48,12 +52,11 @@ export function SliderField({
         max={max}
         step={step}
         value={Math.min(max, Math.max(min, value))}
+        disabled={disabled}
         aria-label={label || 'Slider'}
-        style={{
-          ['--ds-fill' as string]: `${
-            max === min ? 0 : ((Math.min(max, Math.max(min, value)) - min) / (max - min)) * 100
-          }%`,
-        }}
+        style={rangeFillStyle(
+          max === min ? 0 : ((Math.min(max, Math.max(min, value)) - min) / (max - min)) * 100,
+        )}
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </div>

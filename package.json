@@ -11,6 +11,7 @@
     "build:chrome": "wxt build -b chrome --mv3",
     "build:firefox": "wxt build -b firefox --mv3",
     "zip": "wxt zip -b chrome --mv3 && wxt zip -b firefox --mv3",
+    "icons": "node scripts/generate-icons.mjs",
     "compile": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

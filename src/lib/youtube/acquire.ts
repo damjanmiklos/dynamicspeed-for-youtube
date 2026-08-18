@@ -1,7 +1,11 @@
 import { requestFromMain } from '../bridge/isolated';
 import type { PlayerSnapshot } from '../bridge/protocol';
 import { parseJson3Safe } from '../transcript/parse-json3';
-import { forceJson3Url, selectCaptionTrack } from '../transcript/select-track';
+import {
+  selectCaptionTrack,
+  timedTextBelongsToVideo,
+  toSafeTimedTextUrl,
+} from '../transcript/select-track';
 import type { CaptionTrack, WordToken } from '../transcript/types';
 import { recallTokens, rememberTokens } from './cache';
 import { parseVideoId } from './video-id';
@@ -14,14 +18,22 @@ export type AcquireResult = {
   snapshot: PlayerSnapshot;
 };
 
-function asTracks(snapshot: PlayerSnapshot): CaptionTrack[] {
-  return snapshot.tracks.map((track) => ({
-    baseUrl: track.baseUrl,
-    languageCode: track.languageCode,
-    languageName: track.languageName,
-    kind: track.kind,
-    vssId: track.vssId,
-  }));
+function asTracks(snapshot: PlayerSnapshot, videoId: string): CaptionTrack[] {
+  const allowed: CaptionTrack[] = [];
+  for (const track of snapshot.tracks) {
+    const baseUrl = toSafeTimedTextUrl(track.baseUrl);
+    if (!baseUrl || !timedTextBelongsToVideo(baseUrl, videoId)) {
+      continue;
+    }
+    allowed.push({
+      baseUrl,
+      languageCode: track.languageCode,
+      languageName: track.languageName,
+      kind: track.kind,
+      vssId: track.vssId,
+    });
+  }
+  return allowed;
 }
 
 function tokensFromUnknown(
@@ -33,27 +45,61 @@ function tokensFromUnknown(
   });
 }
 
+async function fetchTimedTextJson(baseUrl: string): Promise<unknown | null> {
+  const safe = toSafeTimedTextUrl(baseUrl);
+  if (!safe) {
+    return null;
+  }
+  const response = await fetch(safe, { credentials: 'include' });
+  if (!response.ok) {
+    return null;
+  }
+  return response.json();
+}
+
+function isPlayerSnapshot(value: unknown): value is PlayerSnapshot {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      Array.isArray((value as PlayerSnapshot).tracks),
+  );
+}
+
 export async function acquireTranscript(
   settings: DynamicSpeedSettings,
 ): Promise<AcquireResult> {
-  const snapshot = await requestFromMain<PlayerSnapshot>(
-    'GET_PLAYER_SNAPSHOT',
-    parseVideoId(location.href) ?? '',
-    null,
-  );
-  const videoId = snapshot.videoId ?? parseVideoId(location.href);
-  if (!videoId) {
+  const pageVideoId = parseVideoId(location.href);
+  if (!pageVideoId) {
     throw new Error('No video id');
   }
+  const rawSnapshot = await requestFromMain<unknown>(
+    'GET_PLAYER_SNAPSHOT',
+    pageVideoId,
+    null,
+  );
+  const snapshot: PlayerSnapshot = isPlayerSnapshot(rawSnapshot)
+    ? rawSnapshot
+    : {
+        videoId: pageVideoId,
+        title: null,
+        channelId: null,
+        channelName: null,
+        duration: null,
+        isLive: false,
+        isShorts: false,
+        isMusic: false,
+        tracks: [],
+      };
+  const trustedId = pageVideoId;
 
-  const track = selectCaptionTrack(asTracks(snapshot), {
+  const track = selectCaptionTrack(asTracks(snapshot, trustedId), {
     language: settings.captionLanguage,
     preferManual: settings.preferManualCaptions,
   });
 
   if (track) {
     const cached = await recallTokens({
-      videoId,
+      videoId: trustedId,
       language: track.languageCode,
       trackKind: track.kind ?? 'asr',
     });
@@ -62,16 +108,12 @@ export async function acquireTranscript(
     }
 
     try {
-      const json = await requestFromMain<unknown>(
-        'FETCH_TIMEDTEXT',
-        videoId,
-        { url: forceJson3Url(track.baseUrl) },
-      );
+      const json = await fetchTimedTextJson(track.baseUrl);
       const tokens = tokensFromUnknown(json, settings);
       if (tokens.length > 0) {
         await rememberTokens(
           {
-            videoId,
+            videoId: trustedId,
             language: track.languageCode,
             trackKind: track.kind ?? 'asr',
           },
@@ -80,20 +122,20 @@ export async function acquireTranscript(
         return { tokens, source: 'timedtext', track, snapshot };
       }
     } catch {
-      // fall through to captured / innertube payload already on snapshot
+      // fall through to MAIN fallback that never takes a client URL
     }
   }
 
   const captured = await requestFromMain<unknown>(
-    'FETCH_TIMEDTEXT',
-    videoId,
-    { url: '', waitForCapture: true },
+    'ACQUIRE_FALLBACK_TRANSCRIPT',
+    trustedId,
+    null,
   ).catch(() => null);
   const capturedTokens = tokensFromUnknown(captured, settings);
   if (capturedTokens.length > 0) {
     await rememberTokens(
       {
-        videoId,
+        videoId: trustedId,
         language: track?.languageCode ?? settings.captionLanguage,
         trackKind: track?.kind ?? 'asr',
       },

@@ -8,6 +8,13 @@ import {
 
 let requestSeq = 0;
 
+function newRequestId(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  requestSeq += 1;
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('') + requestSeq.toString(16);
+}
+
 export function postBridge(message: Omit<BridgeMessage, 'source'>): void {
   window.postMessage({ ...message, source: BRIDGE_SOURCE }, window.location.origin);
 }
@@ -18,7 +25,7 @@ export function requestFromMain<T>(
   payload: unknown,
   timeoutMs = 8000,
 ): Promise<T> {
-  const requestId = `ds-${Date.now()}-${(requestSeq += 1)}`;
+  const requestId = newRequestId();
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => {
       window.removeEventListener('message', onMessage);

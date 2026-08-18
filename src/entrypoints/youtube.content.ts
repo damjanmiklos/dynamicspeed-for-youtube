@@ -62,9 +62,9 @@ export default defineContentScript({
       controller.beginSlew();
     });
 
-    const unlisten = listenToMainEvents((name, message) => {
+    const unlisten = listenToMainEvents((name) => {
       if (name === 'VIDEO_ID_CHANGED') {
-        snapshot = message.payload as PlayerSnapshot;
+        snapshot = null;
         void loadForCurrentVideo();
       }
     });

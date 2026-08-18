@@ -8,7 +8,7 @@ import {
 
 export type MainBridgeHandlers = {
   getSnapshot: () => PlayerSnapshot;
-  fetchTimedText: (url: string) => Promise<unknown>;
+  acquireFallbackTranscript: () => Promise<unknown>;
 };
 
 function reply(request: BridgeMessage, payload: unknown, error?: string): void {
@@ -55,15 +55,11 @@ export function listenToIsolatedRequests(handlers: MainBridgeHandlers): () => vo
           reply(message, handlers.getSnapshot());
           return;
         }
-        if (name === 'FETCH_TIMEDTEXT') {
-          const url =
-            typeof message.payload === 'string'
-              ? message.payload
-              : String((message.payload as { url?: string })?.url ?? '');
-          reply(message, await handlers.fetchTimedText(url));
+        if (name === 'ACQUIRE_FALLBACK_TRANSCRIPT') {
+          reply(message, await handlers.acquireFallbackTranscript());
           return;
         }
-        throw new Error(`Unknown bridge request ${name}`);
+        throw new Error(`Unknown bridge request ${String(name)}`);
       } catch (error) {
         reply(message, null, error instanceof Error ? error.message : String(error));
       }

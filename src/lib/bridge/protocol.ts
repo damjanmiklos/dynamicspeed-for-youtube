@@ -2,7 +2,7 @@ export const BRIDGE_SOURCE = 'dynamicspeed-player-bridge';
 
 export type BridgeMessageType = 'DS_REQUEST' | 'DS_RESPONSE' | 'DS_EVENT';
 
-export type BridgeRequestName = 'GET_PLAYER_SNAPSHOT' | 'FETCH_TIMEDTEXT';
+export type BridgeRequestName = 'GET_PLAYER_SNAPSHOT' | 'ACQUIRE_FALLBACK_TRANSCRIPT';
 
 export type BridgeEventName =
   | 'RAW_TRACKS_RESOLVED'
@@ -50,20 +50,7 @@ export const YOUTUBE_ORIGINS = new Set([
 ]);
 
 export function isYouTubeOrigin(origin: string): boolean {
-  if (YOUTUBE_ORIGINS.has(origin)) {
-    return true;
-  }
-  try {
-    const url = new URL(origin);
-    return (
-      url.protocol === 'https:' &&
-      (url.hostname === 'youtube.com' || url.hostname.endsWith('.youtube.com') ||
-        url.hostname === 'youtube-nocookie.com' ||
-        url.hostname.endsWith('.youtube-nocookie.com'))
-    );
-  } catch {
-    return false;
-  }
+  return YOUTUBE_ORIGINS.has(origin);
 }
 
 export function isBridgeMessage(data: unknown): data is BridgeMessage {

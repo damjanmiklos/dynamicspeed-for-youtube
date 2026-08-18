@@ -4,7 +4,7 @@ export const ChannelOverrideSchema = z.object({
   disabled: z.boolean().optional(),
   targetWpm: z.number().min(80).max(400).optional(),
   maxSpeed: z.number().min(0.5).max(5).optional(),
-  name: z.string().optional(),
+  name: z.string().max(200).optional(),
 });
 
 export const DynamicSpeedSettingsSchema = z
@@ -31,9 +31,14 @@ export const DynamicSpeedSettingsSchema = z
     longPauseSec: z.number().min(0.5).max(5).default(1.8),
     treatMusicAsBRoll: z.boolean().default(true),
 
-    channelOverrides: z.record(z.string(), ChannelOverrideSchema).default({}),
-    disabledVideoIds: z.array(z.string()).default([]),
-    captionLanguage: z.string().default('en'),
+    channelOverrides: z
+      .record(z.string().max(64), ChannelOverrideSchema)
+      .default({})
+      .refine((value) => Object.keys(value).length <= 100, {
+        message: 'Too many channel overrides',
+      }),
+    disabledVideoIds: z.array(z.string().max(32)).max(200).default([]),
+    captionLanguage: z.string().min(2).max(16).default('en'),
     preferManualCaptions: z.boolean().default(true),
     manualOverrideTimeoutSec: z.number().min(0).max(60).default(10),
     ignoreAds: z.boolean().default(true),

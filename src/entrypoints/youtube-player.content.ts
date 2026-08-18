@@ -1,6 +1,6 @@
 import { emitBridgeEvent, listenToIsolatedRequests } from '../lib/bridge/main';
 import type { CaptionTrackPayload, PlayerSnapshot } from '../lib/bridge/protocol';
-import { forceJson3Url } from '../lib/transcript/select-track';
+import { toSafeTimedTextUrl } from '../lib/transcript/select-track';
 import { parseVideoId, isShortsPath, YOUTUBE_MATCHES } from '../lib/youtube/video-id';
 
 type PlayerResponse = {
@@ -66,15 +66,24 @@ function readPlayerResponse(): PlayerResponse | null {
 function tracksFrom(response: PlayerResponse | null): CaptionTrackPayload[] {
   const tracks =
     response?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
-  return tracks
-    .filter((track) => track.baseUrl)
-    .map((track) => ({
-      baseUrl: track.baseUrl as string,
+  const allowed: CaptionTrackPayload[] = [];
+  for (const track of tracks) {
+    if (!track.baseUrl) {
+      continue;
+    }
+    const baseUrl = toSafeTimedTextUrl(track.baseUrl);
+    if (!baseUrl) {
+      continue;
+    }
+    allowed.push({
+      baseUrl,
       languageCode: track.languageCode ?? 'en',
       languageName: track.name?.simpleText,
       kind: track.kind,
       vssId: track.vssId,
-    }));
+    });
+  }
+  return allowed;
 }
 
 function parseClock(value: string): number {
@@ -138,6 +147,9 @@ function readYtcfg(key: string): string | null {
 }
 
 async function innertubePlayer(videoId: string, client: 'WEB' | 'ANDROID'): Promise<PlayerResponse | null> {
+  if (!/^[\w-]{11}$/.test(videoId)) {
+    return null;
+  }
   const apiKey = readYtcfg('INNERTUBE_API_KEY');
   if (!apiKey) {
     return null;
@@ -182,7 +194,7 @@ function snapshotFrom(response: PlayerResponse | null): PlayerSnapshot {
   const href = location.href;
   const details = response?.videoDetails;
   const micro = response?.microformat?.playerMicroformatRenderer;
-  const videoId = details?.videoId ?? parseVideoId(href);
+  const videoId = parseVideoId(href) ?? details?.videoId ?? null;
   return {
     videoId,
     title: details?.title ?? document.title,
@@ -194,6 +206,18 @@ function snapshotFrom(response: PlayerResponse | null): PlayerSnapshot {
     isMusic: (micro?.category ?? '').toLowerCase() === 'music',
     tracks: tracksFrom(response),
   };
+}
+
+async function fetchAllowlistedTimedText(baseUrl: string): Promise<unknown | null> {
+  const safe = toSafeTimedTextUrl(baseUrl);
+  if (!safe) {
+    return null;
+  }
+  const timed = await fetch(safe, { credentials: 'include' });
+  if (!timed.ok) {
+    return null;
+  }
+  return timed.json();
 }
 
 let lastCapture: { videoId: string; data: unknown } | null = null;
@@ -212,12 +236,11 @@ function installTimedtextObserver(): void {
             : raw instanceof Request
               ? raw.url
               : '';
-      if (url.includes('/api/timedtext')) {
+      if (toSafeTimedTextUrl(url)) {
         const clone = response.clone();
         void clone.json().then((data) => {
           const videoId = parseVideoId(location.href) ?? '';
           lastCapture = { videoId, data };
-          emitBridgeEvent('TIMEDTEXT_CAPTURED', videoId, data);
         });
       }
     } catch {
@@ -243,6 +266,29 @@ async function waitForCapture(videoId: string, timeoutMs: number): Promise<unkno
   return lastCapture?.data ?? null;
 }
 
+async function acquireFallbackTranscript(): Promise<unknown> {
+  const videoId = parseVideoId(location.href) ?? '';
+  const captured = await waitForCapture(videoId, 5000);
+  if (captured) {
+    return captured;
+  }
+  let response = readPlayerResponse();
+  if (!tracksFrom(response).length && videoId) {
+    response =
+      (await innertubePlayer(videoId, 'WEB')) ??
+      (await innertubePlayer(videoId, 'ANDROID')) ??
+      response;
+  }
+  const track = tracksFrom(response)[0];
+  if (track) {
+    const json = await fetchAllowlistedTimedText(track.baseUrl);
+    if (json) {
+      return json;
+    }
+  }
+  return scrapeDomTranscript();
+}
+
 export default defineContentScript({
   matches: [...YOUTUBE_MATCHES],
   world: 'MAIN',
@@ -253,37 +299,7 @@ export default defineContentScript({
       getSnapshot() {
         return snapshotFrom(readPlayerResponse());
       },
-      async fetchTimedText(url: string) {
-        const videoId = parseVideoId(location.href) ?? '';
-        if (!url) {
-          const captured = await waitForCapture(videoId, 5000);
-          if (captured) {
-            return captured;
-          }
-          let response = readPlayerResponse();
-          if (!tracksFrom(response).length && videoId) {
-            response =
-              (await innertubePlayer(videoId, 'WEB')) ??
-              (await innertubePlayer(videoId, 'ANDROID')) ??
-              response;
-          }
-          const track = tracksFrom(response)[0];
-          if (track) {
-            const timed = await fetch(forceJson3Url(track.baseUrl), {
-              credentials: 'include',
-            });
-            if (timed.ok) {
-              return timed.json();
-            }
-          }
-          return scrapeDomTranscript();
-        }
-        const timed = await fetch(forceJson3Url(url), { credentials: 'include' });
-        if (!timed.ok) {
-          throw new Error(`timedtext HTTP ${timed.status}`);
-        }
-        return timed.json();
-      },
+      acquireFallbackTranscript,
     });
 
     let lastId = parseVideoId(location.href);
@@ -291,7 +307,7 @@ export default defineContentScript({
       const id = parseVideoId(location.href);
       if (id && id !== lastId) {
         lastId = id;
-        emitBridgeEvent('VIDEO_ID_CHANGED', id, snapshotFrom(readPlayerResponse()));
+        emitBridgeEvent('VIDEO_ID_CHANGED', id, null);
       }
     };
     document.addEventListener('yt-navigate-finish', emitNav);

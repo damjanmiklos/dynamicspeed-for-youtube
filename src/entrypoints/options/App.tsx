@@ -200,6 +200,10 @@ export function OptionsApp() {
                       if (!file) {
                         return;
                       }
+                      if (file.size > 100_000) {
+                        setImportError('Settings file is too large.');
+                        return;
+                      }
                       try {
                         const parsed = JSON.parse(await file.text());
                         await update(parsed);

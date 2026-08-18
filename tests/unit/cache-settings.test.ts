@@ -8,7 +8,7 @@ import {
 import { parseSettings } from '../../src/lib/settings/defaults';
 import { DynamicSpeedSettingsSchema } from '../../src/lib/settings/schema';
 import { isBridgeMessage, isYouTubeOrigin } from '../../src/lib/bridge/protocol';
-import { forceJson3Url, selectCaptionTrack } from '../../src/lib/transcript/select-track';
+import { forceJson3Url, selectCaptionTrack, toSafeTimedTextUrl } from '../../src/lib/transcript/select-track';
 import { parseVideoId } from '../../src/lib/youtube/video-id';
 
 describe('transcript LRU cache', () => {
@@ -108,6 +108,7 @@ describe('bridge guards', () => {
   it('accepts YouTube origins', () => {
     expect(isYouTubeOrigin('https://www.youtube.com')).toBe(true);
     expect(isYouTubeOrigin('https://evil.example')).toBe(false);
+    expect(isYouTubeOrigin('https://evil.youtube.com')).toBe(false);
   });
 });
 
@@ -116,6 +117,22 @@ describe('caption URL + track pick', () => {
     const url = forceJson3Url('https://www.youtube.com/api/timedtext?v=a&fmt=srv3');
     expect(url.match(/fmt=/g)?.length).toBe(1);
     expect(url).toContain('fmt=json3');
+  });
+
+  it('rejects non-timedtext and off-site caption URLs', () => {
+    expect(() =>
+      forceJson3Url('https://evil.example/api/timedtext?v=a'),
+    ).toThrow();
+    expect(() =>
+      forceJson3Url('https://www.youtube.com/watch?v=a'),
+    ).toThrow();
+    expect(() => forceJson3Url('javascript:alert(1)')).toThrow();
+    expect(
+      toSafeTimedTextUrl('https://www.youtube.com/api/timedtext?v=dQw4w9WgXcQ'),
+    ).toContain('/api/timedtext');
+    expect(
+      toSafeTimedTextUrl('https://user:pass@www.youtube.com/api/timedtext?v=a'),
+    ).toBeNull();
   });
 
   it('prefers matching manual tracks', () => {

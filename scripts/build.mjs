@@ -4,21 +4,20 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const wxtCli = join(root, 'node_modules', 'wxt', 'bin', 'wxt.mjs');
 
 function run(args) {
-  const result = spawnSync(npx, args, {
+  const result = spawnSync(process.execPath, [wxtCli, ...args], {
     cwd: root,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
   });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
 }
 
-run(['wxt', 'build', '-b', 'chrome', '--mv3']);
-run(['wxt', 'build', '-b', 'firefox', '--mv3']);
+run(['build', '-b', 'chrome', '--mv3']);
+run(['build', '-b', 'firefox', '--mv3']);
 
 function readManifest(browser) {
   const candidates = [

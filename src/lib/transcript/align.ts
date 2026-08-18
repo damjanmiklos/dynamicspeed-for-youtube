@@ -5,6 +5,7 @@ import type { TimedCue, WordToken } from './types';
 export type AlignOptions = {
   syllableWeighting: boolean;
   minDurationSec?: number;
+  language?: string | null;
 };
 
 function weightForWord(word: string, syllableWeighting: boolean): number {
@@ -56,7 +57,7 @@ export function proportionallyAlignCue(
       t1: Math.max(t1, t0 + 1e-4),
       text: words[i],
       syllables,
-      jargon: isJargonWord(words[i], syllables),
+      jargon: isJargonWord(words[i], syllables, options.language),
       meta: false,
     });
     cursor = t1;
@@ -67,6 +68,7 @@ export function proportionallyAlignCue(
 
 export function tokensFromTimedWords(
   words: Array<{ text: string; t0: number; t1: number }>,
+  language?: string | null,
 ): WordToken[] {
   return words.map((word) => {
     const text = word.text.trim();
@@ -77,7 +79,7 @@ export function tokensFromTimedWords(
       t1: Math.max(word.t1, word.t0 + 1e-4),
       text,
       syllables,
-      jargon: meta ? false : isJargonWord(text, syllables),
+      jargon: meta ? false : isJargonWord(text, syllables, language),
       meta,
     };
   });

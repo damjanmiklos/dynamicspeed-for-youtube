@@ -17,3 +17,5 @@ export const LIMITS = {
 export const INTRO_SLEW_SEC = 2;
 /** How quickly playback eases to the fallback speed when there is no transcript. */
 export const FALLBACK_SLEW_SEC = 0.35;
+/** Video-time jump treated as a skip. Rate snaps instead of interpolating. */
+export const SEEK_SNAP_SEC = 0.35;

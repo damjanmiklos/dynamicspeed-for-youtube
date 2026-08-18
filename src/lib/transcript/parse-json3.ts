@@ -126,6 +126,7 @@ export function parseJson3(
             t0: word.t0 as number,
             t1: word.t1 as number,
           })),
+          options.language,
         ),
       );
     } else {

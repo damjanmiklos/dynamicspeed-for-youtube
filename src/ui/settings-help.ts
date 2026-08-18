@@ -47,9 +47,9 @@ export const SETTINGS_HELP = {
   responsiveness: {
     label: 'About Responsiveness',
     body: [
-      'One “feel” control that sets how quickly speed is allowed to change. It does not change Target WPM; it changes how much the speed curve is smoothed and how fast the player may slew after seeks or setting changes.',
+      'One “feel” control that sets how quickly speed is allowed to change. It does not change Target WPM; it changes how much the speed curve is smoothed and how fast the player may slew after you change settings.',
       'Low is molasses-smooth: a wide Gaussian window (~18 s), a wide median window (~10 s), and a slow slew cap (~0.12× per second). High reacts sooner: tighter windows (~5 s and ~3 s) and a faster slew cap (~0.9× per second).',
-      'If you unlock custom dynamics, this knob becomes display-only. The Gaussian, median, and slew sliders on the Pacing engine page then take over.',
+      'If you unlock custom dynamics, this slider becomes display-only. The Gaussian, median, and slew sliders on the Pacing engine page then take over.',
     ],
   },
   captionLanguage: {
@@ -79,17 +79,17 @@ export const SETTINGS_HELP = {
   jargonCompensation: {
     label: 'About jargon compensation',
     body: [
-      'Extra weight on hard words: three or more syllables and not on the Dale–Chall easy-word list. Those tokens are multiplied by this factor when WPM is estimated.',
+      'Extra weight on hard words: three or more syllables and not in Google’s 10,000 most common English words. Those tokens are multiplied by this factor when WPM is estimated.',
       '1.00 is off. 1.15 means jargon counts 15% more, so lectures full of long technical terms are treated as slightly faster speech and the video slows a little more.',
-      'This only affects the WPM estimate, not YouTube’s captions themselves. Combine it with syllable weighting for the strongest “this talk is dense” effect.',
+      'The list is English-only. If the caption track is not English, jargon compensation does nothing and every word is treated as ordinary.',
     ],
   },
   customDynamics: {
     label: 'About unlock custom dynamics',
     body: [
-      'When this is off, Gaussian window, median window, and slew limit are driven by the Responsiveness knob. The sliders below still show stored numbers, but the live “feel pack” values in their hints are what actually run.',
-      'Turn this on to edit those three engine values by hand. The Responsiveness knob then stops changing the curve and is shown as Custom.',
-      'Use this if you want, for example, very heavy smoothing with a fast slew, which the single knob cannot do because it moves all three together.',
+      'When this is off, Gaussian window, median window, and slew limit are driven by the Feel / Responsiveness slider. The sliders below still show stored numbers, but the live “feel pack” values in their hints are what actually run.',
+      'Turn this on to edit those three engine values by hand. The Feel slider then stops changing the curve and shows Custom.',
+      'Use this if you want, for example, very heavy smoothing with a fast slew, which the single slider cannot do because it moves all three together.',
     ],
   },
   gaussianSigma: {
@@ -111,8 +111,8 @@ export const SETTINGS_HELP = {
   slewLimit: {
     label: 'About slew limit',
     body: [
-      'Maximum change in playback rate per second while DynamicSpeed is catching up — after a seek, after you change settings that rebuild the curve, and while easing to the default speed.',
-      'The main speed curve itself is interpolated smoothly (monotone cubic / PCHIP). This cap is the extra “don’t jump” brake on top of that when the player has to rejoin the curve.',
+      'Maximum change in playback rate per second while DynamicSpeed is catching up after you change settings that rebuild the curve, and while easing to the default speed. Skipping in the video snaps to the calculated rate immediately.',
+      'The main speed curve itself is interpolated smoothly (monotone cubic / PCHIP) during normal playback. This cap is the extra “don’t jump” brake when the player has to rejoin the curve after a settings change.',
       'This slider only applies while custom dynamics are unlocked. Low values feel glued; high values snap to the new rate sooner.',
     ],
   },

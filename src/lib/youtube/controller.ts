@@ -2,14 +2,14 @@ import {
   buildSpeedCurve,
   curveBuildInputFromSettings,
   introRate,
+  isSeekJump,
   rateAt,
-  RATE_JUMP_EPSILON,
   slewStep,
   wpmAt,
   type SpeedCurve,
 } from '../pacing';
 import { clamp } from '../pacing/feel';
-import { FALLBACK_SLEW_SEC, INTRO_SLEW_SEC } from '../settings/limits';
+import { FALLBACK_SLEW_SEC, INTRO_SLEW_SEC, SEEK_SNAP_SEC } from '../settings/limits';
 import type { DynamicSpeedSettings } from '../settings/schema';
 import { speedCalculationChanged } from '../settings/diff';
 import { resolveForPage, type ResolvedPlaybackSettings } from '../settings/resolve';
@@ -96,7 +96,8 @@ export function createPlaybackController(hooks: ControllerHooks) {
     }
     if (video) {
       video.removeEventListener('ratechange', onRateChange);
-      video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('seeking', onSeek);
+      video.removeEventListener('seeked', onSeek);
     }
     video = next;
     introActive = false;
@@ -106,7 +107,8 @@ export function createPlaybackController(hooks: ControllerHooks) {
       applied = video.playbackRate || 1;
       lastVideoTime = video.currentTime;
       video.addEventListener('ratechange', onRateChange);
-      video.addEventListener('seeked', onSeeked);
+      video.addEventListener('seeking', onSeek);
+      video.addEventListener('seeked', onSeek);
     }
   }
 
@@ -127,20 +129,40 @@ export function createPlaybackController(hooks: ControllerHooks) {
     slewing = false;
   }
 
-  function onSeeked(): void {
-    if (!video || !curve || introActive) {
+  function automationOwnsRate(current: ResolvedPlaybackSettings): boolean {
+    if (!current.automationAllowed || forceHold != null) {
+      return false;
+    }
+    if (performance.now() < overrideUntil) {
+      return false;
+    }
+    if (current.ignoreAds && isAdShowing()) {
+      return false;
+    }
+    return true;
+  }
+
+  /** Timeline clicks, skip buttons, and arrow-key nudges all fire seeking/seeked. */
+  function onSeek(): void {
+    snapRateToPlayhead();
+  }
+
+  function snapRateToPlayhead(): void {
+    if (!video || !curve) {
+      lastVideoTime = video?.currentTime ?? lastVideoTime;
       return;
     }
     const current = resolved();
-    if (!current) {
+    if (!current || !automationOwnsRate(current)) {
+      lastVideoTime = video.currentTime;
       return;
     }
-    const desired = rateAt(curve, video.currentTime);
-    if (Math.abs(desired - applied) > RATE_JUMP_EPSILON) {
-      slewing = true;
-    } else {
-      applied = desired;
-    }
+    applied = rateAt(curve, video.currentTime);
+    slewing = false;
+    cancelIntro();
+    lastVideoTime = video.currentTime;
+    ownRate(applied);
+    updateChip(applied, current);
   }
 
   function cancelIntro(): void {
@@ -208,16 +230,14 @@ export function createPlaybackController(hooks: ControllerHooks) {
     }
 
     const desired = rateAt(curve, video.currentTime);
-    const jumped =
-      Math.abs(video.currentTime - lastVideoTime) > 1 &&
-      Math.abs(desired - applied) > RATE_JUMP_EPSILON;
+    const skipped = isSeekJump(lastVideoTime, video.currentTime, SEEK_SNAP_SEC);
     lastVideoTime = video.currentTime;
 
-    if (jumped && !introActive) {
-      slewing = true;
-    }
-
-    if (introActive) {
+    if (skipped) {
+      applied = desired;
+      slewing = false;
+      cancelIntro();
+    } else if (introActive) {
       const elapsed = (now - introStartedAt) / 1000;
       applied = introRate(introFrom, desired, elapsed, INTRO_SLEW_SEC);
       if (elapsed >= INTRO_SLEW_SEC) {
@@ -406,7 +426,8 @@ export function createPlaybackController(hooks: ControllerHooks) {
       removePlayerChip();
       if (video) {
         video.removeEventListener('ratechange', onRateChange);
-        video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('seeking', onSeek);
+        video.removeEventListener('seeked', onSeek);
       }
     },
   };

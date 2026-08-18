@@ -72,5 +72,5 @@ export type ChannelOverride = z.infer<typeof ChannelOverrideSchema>;
 export type DynamicSpeedSettings = z.infer<typeof DynamicSpeedSettingsSchema>;
 
 export const SETTINGS_STORAGE_KEY = 'ds.settings';
-export const TRANSCRIPT_CACHE_KEY = 'ds.transcriptCache';
+export const TRANSCRIPT_CACHE_KEY = 'ds.transcriptCache.v2';
 export const SETTINGS_VERSION = 1;

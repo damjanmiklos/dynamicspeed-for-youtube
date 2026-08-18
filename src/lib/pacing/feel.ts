@@ -1,4 +1,4 @@
-/** Feel-pack mapping for the responsiveness knob. Pure math only. */
+/** Feel-pack mapping for the responsiveness slider. Pure math only. */
 
 export function clamp(value: number, min: number, max: number): number {
   if (Number.isNaN(value)) {

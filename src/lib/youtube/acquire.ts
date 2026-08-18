@@ -40,9 +40,11 @@ function asTracks(snapshot: PlayerSnapshot, videoId: string): CaptionTrack[] {
 function tokensFromUnknown(
   data: unknown,
   settings: DynamicSpeedSettings,
+  language?: string | null,
 ): WordToken[] {
   return parseJson3Safe(data, {
     syllableWeighting: settings.syllableWeighting,
+    language,
   });
 }
 
@@ -152,7 +154,7 @@ export async function acquireTranscript(
 
     try {
       const json = await fetchTimedTextJson(track.baseUrl);
-      const tokens = tokensFromUnknown(json, settings);
+      const tokens = tokensFromUnknown(json, settings, track.languageCode);
       if (tokens.length > 0) {
         await rememberTokens(
           {
@@ -175,7 +177,11 @@ export async function acquireTranscript(
     null,
     15_000,
   ).catch(() => null);
-  const capturedTokens = tokensFromUnknown(captured, settings);
+  const capturedTokens = tokensFromUnknown(
+    captured,
+    settings,
+    track?.languageCode ?? settings.captionLanguage,
+  );
   if (capturedTokens.length > 0) {
     await rememberTokens(
       {

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Knob } from '../../ui/components/Knob';
+import { FeelSlider } from '../../ui/components/FeelSlider';
 import { SliderField } from '../../ui/components/SliderField';
 import { SelectField } from '../../ui/components/SelectField';
 import { SupportLink } from '../../ui/components/SupportLink';
@@ -180,24 +180,17 @@ export function OptionsApp() {
                   onChange={(fallbackSpeed) => void update({ fallbackSpeed })}
                 />
               </Row>
-              <div className="grid items-center gap-6 py-6 md:grid-cols-[1fr_auto]">
-                <div>
-                  <div className="flex items-center">
-                    <div className="text-sm font-medium">Responsiveness</div>
-                    <InfoTip help={SETTINGS_HELP.responsiveness} />
-                  </div>
-                  <div className="max-w-xl text-sm text-ds-muted">
-                    One control for how quickly playback may change. Low is molasses-smooth.
-                    High reacts to incoming speech sooner. Unlocking custom engine sliders
-                    turns this knob into a display-only Custom mode.
-                  </div>
-                </div>
-                <Knob
+              <Row
+                title="Responsiveness"
+                hint="Low is molasses-smooth. High reacts to incoming speech sooner. Unlocking custom engine sliders turns this into a display-only Custom mode."
+                help={SETTINGS_HELP.responsiveness}
+              >
+                <FeelSlider
                   value={settings.responsiveness}
                   disabled={settings.customDynamicsUnlocked}
                   onChange={(responsiveness) => void update({ responsiveness })}
                 />
-              </div>
+              </Row>
               <Row title="Caption language" hint="Preferred caption track when several exist." help={SETTINGS_HELP.captionLanguage}>
                 <SelectField
                   value={settings.captionLanguage}
@@ -271,7 +264,7 @@ export function OptionsApp() {
               <h1 className="mb-2 text-3xl font-semibold">Pacing engine</h1>
               <p className="mb-6 max-w-2xl text-ds-muted">
                 These controls change how spoken WPM is estimated. Leave custom values locked
-                unless you want to override the responsiveness knob.
+                unless you want to override the responsiveness slider.
               </p>
               <Row
                 title="Syllable-weighted WPM"
@@ -287,7 +280,7 @@ export function OptionsApp() {
               </Row>
               <Row
                 title="Jargon compensation"
-                hint="Extra weight on hard words (not in the Dale-Chall easy list, 3+ syllables). 1.00 is off. 1.15 means those words count 15% more."
+                hint="Extra weight on hard English words (not in Google's 10k English list, 3+ syllables). Ignored for non-English captions. 1.00 is off. 1.15 means those words count 15% more."
                 help={SETTINGS_HELP.jargonCompensation}
               >
                 <SliderField
@@ -302,7 +295,7 @@ export function OptionsApp() {
               </Row>
               <Row
                 title="Unlock custom dynamics"
-                hint="Replace the feel knob with explicit Gaussian, median, and slew values."
+                hint="Replace the feel slider with explicit Gaussian, median, and slew values."
                 help={SETTINGS_HELP.customDynamics}
               >
                 <div className="flex justify-end">
@@ -348,7 +341,7 @@ export function OptionsApp() {
               </Row>
               <Row
                 title="Slew limit"
-                hint={`Max speed change per second during seeks and setting changes. Current feel pack: ${dynamics.slewRateLimit.toFixed(2)}×/s.`}
+                hint={`Max speed change per second after setting changes. Seeks snap instantly. Current feel pack: ${dynamics.slewRateLimit.toFixed(2)}×/s.`}
                 help={SETTINGS_HELP.slewLimit}
               >
                 <SliderField

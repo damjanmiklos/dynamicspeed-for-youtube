@@ -1,6 +1,6 @@
 export { clamp, lerp, smoothstep, resolveDynamics } from './feel';
 export type { Dynamics } from './feel';
-export { slewStep, RATE_JUMP_EPSILON, introRate } from './slew';
+export { slewStep, RATE_JUMP_EPSILON, introRate, isSeekJump } from './slew';
 export { pchipEvaluate, pchipSlopes, cosineInterpolate } from './pchip';
 export { median, movingMedian } from './median';
 export { gaussianSmooth, emaSmooth } from './gaussian';
@@ -21,6 +21,8 @@ export {
   countSyllables,
   isEasyWord,
   isJargonWord,
+  isEnglishLanguageCode,
+  easyWordListSize,
   effectiveWords,
   AVG_SYLLABLES_PER_WORD,
 } from './syllables';

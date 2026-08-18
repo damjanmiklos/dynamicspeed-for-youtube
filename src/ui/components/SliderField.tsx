@@ -49,6 +49,11 @@ export function SliderField({
         step={step}
         value={Math.min(max, Math.max(min, value))}
         aria-label={label || 'Slider'}
+        style={{
+          ['--ds-fill' as string]: `${
+            max === min ? 0 : ((Math.min(max, Math.max(min, value)) - min) / (max - min)) * 100
+          }%`,
+        }}
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </div>

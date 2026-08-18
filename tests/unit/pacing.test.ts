@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { pchipEvaluate, pchipSlopes } from '../../src/lib/pacing/pchip';
-import { introRate, slewStep } from '../../src/lib/pacing/slew';
+import { introRate, isSeekJump, slewStep } from '../../src/lib/pacing/slew';
 import { isExternalRateChange } from '../../src/lib/youtube/playback';
 import { resolveDynamics } from '../../src/lib/pacing/feel';
 import { mapWpmToRate } from '../../src/lib/pacing/curve';
 import { gaussianSmooth } from '../../src/lib/pacing/gaussian';
 import { movingMedian } from '../../src/lib/pacing/median';
-import { isJargonWord, countSyllables, normalizeLexeme } from '../../src/lib/pacing/syllables';
+import { isJargonWord, countSyllables, normalizeLexeme, easyWordListSize } from '../../src/lib/pacing/syllables';
 
 describe('PCHIP', () => {
   it('does not overshoot a monotone pair', () => {
@@ -31,6 +31,14 @@ describe('slew', () => {
 
   it('snaps when the delta fits in the window', () => {
     expect(slewStep(1, 1.1, 1, 0.5)).toBeCloseTo(1.1, 8);
+  });
+});
+
+describe('seek jumps', () => {
+  it('treats timeline skips and arrow nudges as seeks', () => {
+    expect(isSeekJump(10, 15)).toBe(true);
+    expect(isSeekJump(10, 5)).toBe(true);
+    expect(isSeekJump(10, 10.05)).toBe(false);
   });
 });
 
@@ -142,13 +150,26 @@ describe('filters', () => {
 });
 
 describe('jargon', () => {
-  it('treats long uncommon words as jargon', () => {
-    const word = 'photosynthesis';
-    expect(isJargonWord(word, countSyllables(word))).toBe(true);
+  it('uses the Google 10k English list', () => {
+    expect(easyWordListSize()).toBe(10_000);
   });
 
-  it('does not treat easy short words as jargon', () => {
-    expect(isJargonWord('because', countSyllables('because'))).toBe(false);
+  it('treats long uncommon English words as jargon', () => {
+    const word = 'photosynthesis';
+    expect(isJargonWord(word, countSyllables(word), 'en')).toBe(true);
+    expect(isJargonWord(word, countSyllables(word), 'en-US')).toBe(true);
+  });
+
+  it('does not treat frequent English words as jargon', () => {
+    expect(isJargonWord('because', countSyllables('because'), 'en')).toBe(false);
+    expect(isJargonWord('computer', countSyllables('computer'), 'en')).toBe(false);
+  });
+
+  it('does not use the English list for other caption languages', () => {
+    const word = 'photosynthesis';
+    expect(isJargonWord(word, countSyllables(word), 'de')).toBe(false);
+    expect(isJargonWord(word, countSyllables(word), 'es')).toBe(false);
+    expect(isJargonWord(word, countSyllables(word))).toBe(false);
   });
 
   it('normalizes typographic apostrophes instead of replacing ASCII with itself', () => {

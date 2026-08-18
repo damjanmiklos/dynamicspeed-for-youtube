@@ -1,8 +1,9 @@
 import { syllable } from 'syllable';
-import daleChallRaw from './data/dale-chall.txt?raw';
+/** Google 10,000 English: first20hours/google-10000-english (Google Trillion Word Corpus). */
+import google10kRaw from './data/google-10k-english.txt?raw';
 
 const EASY_WORDS = new Set(
-  daleChallRaw
+  google10kRaw
     .split(/\r?\n/)
     .map((word) => word.trim().toLowerCase())
     .filter(Boolean),
@@ -29,6 +30,11 @@ export function countSyllables(text: string): number {
   }
 }
 
+export function isEnglishLanguageCode(code: string | null | undefined): boolean {
+  const normalized = (code ?? '').trim().toLowerCase();
+  return normalized === 'en' || normalized === 'eng' || normalized.startsWith('en-');
+}
+
 export function isEasyWord(text: string): boolean {
   const lexeme = normalizeLexeme(text);
   if (!lexeme) {
@@ -37,7 +43,14 @@ export function isEasyWord(text: string): boolean {
   return EASY_WORDS.has(lexeme);
 }
 
-export function isJargonWord(text: string, syllables: number): boolean {
+export function isJargonWord(
+  text: string,
+  syllables: number,
+  language?: string | null,
+): boolean {
+  if (!isEnglishLanguageCode(language)) {
+    return false;
+  }
   return syllables >= 3 && !isEasyWord(text);
 }
 
@@ -58,6 +71,6 @@ export function effectiveWords(input: {
   return base;
 }
 
-export function daleChallSize(): number {
+export function easyWordListSize(): number {
   return EASY_WORDS.size;
 }

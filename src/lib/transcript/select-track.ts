@@ -1,4 +1,5 @@
 import type { CaptionTrack } from './types';
+import { isEnglishLanguageCode } from '../pacing/syllables';
 import { isAllowedYouTubeHost } from '../youtube/video-id';
 
 export function isAllowedTimedTextUrl(
@@ -99,6 +100,5 @@ export function selectCaptionTrack(
 }
 
 export function isEnglishTrack(track: CaptionTrack | null): boolean {
-  const code = track?.languageCode?.toLowerCase() ?? '';
-  return code === 'en' || code.startsWith('en-');
+  return isEnglishLanguageCode(track?.languageCode);
 }

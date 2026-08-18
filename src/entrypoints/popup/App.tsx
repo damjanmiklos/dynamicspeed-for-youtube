@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import { useEffect, useState } from 'react';
-import { Knob } from '../../ui/components/Knob';
+import { FeelSlider } from '../../ui/components/FeelSlider';
 import { SliderField } from '../../ui/components/SliderField';
 import { SpeedConflictBanner } from '../../ui/components/SpeedConflictBanner';
 import { SupportLink } from '../../ui/components/SupportLink';
@@ -113,22 +113,18 @@ export function PopupApp() {
           onChange={(targetWpm) => void update({ targetWpm })}
           unit=" WPM"
         />
-        <div className="flex items-center justify-between rounded-lg border border-ds-border bg-ds-surface px-2.5 py-1.5">
-          <div>
-            <div className="text-sm font-medium">Feel</div>
-            <div className="text-[11px] text-ds-muted">
-              {settings.customDynamicsUnlocked
-                ? 'Custom engine values unlocked'
-                : 'How quickly speed may change'}
-            </div>
-          </div>
-          <Knob
-            compact
-            value={settings.responsiveness}
-            disabled={settings.customDynamicsUnlocked}
-            onChange={(responsiveness) => void update({ responsiveness })}
-          />
-        </div>
+        <FeelSlider
+          compact
+          label="Feel"
+          hint={
+            settings.customDynamicsUnlocked
+              ? 'Custom engine values unlocked'
+              : 'How quickly speed may change'
+          }
+          value={settings.responsiveness}
+          disabled={settings.customDynamicsUnlocked}
+          onChange={(responsiveness) => void update({ responsiveness })}
+        />
         <div className="grid grid-cols-2 gap-2">
           <SliderField
             compact
@@ -170,7 +166,7 @@ export function PopupApp() {
             })
           }
         >
-          {channelDisabled ? 'Enable this channel' : 'Disable this channel'}
+          {channelDisabled ? 'Enable for this channel' : 'Disable for this channel'}
         </button>
         <button
           className="rounded-lg border border-ds-border bg-ds-surface px-2 py-1.5 text-left text-[11px] hover:bg-ds-surface-2 disabled:opacity-40"
@@ -186,7 +182,7 @@ export function PopupApp() {
             })
           }
         >
-          {videoDisabled ? 'Enable this video' : 'Disable this video'}
+          {videoDisabled ? 'Enable for this video' : 'Disable for this video'}
         </button>
       </div>
 

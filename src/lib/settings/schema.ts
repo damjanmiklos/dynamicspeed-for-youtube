@@ -10,7 +10,7 @@ export const ChannelOverrideSchema = z.object({
 
 export const DynamicSpeedSettingsSchema = z
   .object({
-    version: z.number().default(1),
+    version: z.number().default(2),
     enabled: z.boolean().default(true),
     targetWpm: z.number().min(LIMITS.targetWpm.min).max(LIMITS.targetWpm.max).default(165),
     minSpeed: z.number().min(LIMITS.minSpeed.min).max(LIMITS.minSpeed.max).default(0.75),
@@ -29,7 +29,7 @@ export const DynamicSpeedSettingsSchema = z
 
     syllableWeighting: z.boolean().default(true),
     jargonCompensation: z.number().min(1).max(1.5).default(1.15),
-    minChunkSec: z.number().min(0.1).max(1).default(0.3),
+    minChunkSec: z.number().min(0.1).max(1).default(0.15),
     wpmFloor: z.number().min(20).max(200).default(60),
     wpmCeil: z.number().min(200).max(800).default(450),
 
@@ -53,6 +53,7 @@ export const DynamicSpeedSettingsSchema = z
     disabledVideoIds: z.array(z.string().max(32)).max(200).default([]),
     captionLanguage: z.string().min(2).max(16).default('en'),
     preferManualCaptions: z.boolean().default(true),
+    temporarilyEnableCaptions: z.boolean().default(true),
     manualOverrideTimeoutSec: z.number().min(0).max(60).default(10),
     ignoreAds: z.boolean().default(true),
     ignoreMusicVideos: z.boolean().default(true),
@@ -75,4 +76,4 @@ export type DynamicSpeedSettings = z.infer<typeof DynamicSpeedSettingsSchema>;
 
 export const SETTINGS_STORAGE_KEY = 'ds.settings';
 export const TRANSCRIPT_CACHE_KEY = 'ds.transcriptCache.v3';
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;

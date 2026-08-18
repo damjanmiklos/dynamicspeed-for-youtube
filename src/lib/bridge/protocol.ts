@@ -2,7 +2,10 @@ export const BRIDGE_SOURCE = 'dynamicspeed-player-bridge';
 
 export type BridgeMessageType = 'DS_REQUEST' | 'DS_RESPONSE' | 'DS_EVENT';
 
-export type BridgeRequestName = 'GET_PLAYER_SNAPSHOT' | 'ACQUIRE_FALLBACK_TRANSCRIPT';
+export type BridgeRequestName =
+  | 'GET_PLAYER_SNAPSHOT'
+  | 'ACQUIRE_FALLBACK_TRANSCRIPT'
+  | 'SET_CAPTURE_ENABLED';
 
 export type BridgeEventName =
   | 'RAW_TRACKS_RESOLVED'
@@ -57,6 +60,7 @@ const BRIDGE_TYPES = new Set(['DS_REQUEST', 'DS_RESPONSE', 'DS_EVENT']);
 const BRIDGE_NAMES = new Set([
   'GET_PLAYER_SNAPSHOT',
   'ACQUIRE_FALLBACK_TRANSCRIPT',
+  'SET_CAPTURE_ENABLED',
   'RAW_TRACKS_RESOLVED',
   'TIMEDTEXT_CAPTURED',
   'PLAYER_STATE_CHANGE',

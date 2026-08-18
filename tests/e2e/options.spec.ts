@@ -30,6 +30,7 @@ test.describe('extension pages', () => {
     await page.goto(`chrome-extension://${extensionId}/options.html`);
     await expect(page.getByText('DynamicSpeed')).toBeVisible();
     await expect(page.getByText('Target WPM')).toBeVisible();
+    await expect(page.getByText('Temporarily turn on captions to load')).toBeVisible();
     await context.close();
   });
 });

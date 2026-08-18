@@ -23,6 +23,9 @@ export function toSafeTimedTextUrl(
   } catch {
     return null;
   }
+  if (url.protocol === 'http:') {
+    url.protocol = 'https:';
+  }
   if (url.protocol !== 'https:') {
     return null;
   }
@@ -67,6 +70,83 @@ export function timedTextBelongsToVideo(raw: string, videoId: string): boolean {
   }
   const video = new URL(safe).searchParams.get('v');
   return video === videoId;
+}
+
+/** Player caption URLs sometimes omit `v=`; bind them to the watch-page video. */
+export function bindTimedTextToVideo(
+  raw: string,
+  videoId: string,
+  origin = 'https://www.youtube.com',
+): string | null {
+  const safe = toSafeTimedTextUrl(raw, origin);
+  if (!safe || !/^[\w-]{11}$/.test(videoId)) {
+    return null;
+  }
+  const url = new URL(safe);
+  const existing = url.searchParams.get('v');
+  if (existing && existing !== videoId) {
+    return null;
+  }
+  url.searchParams.set('v', videoId);
+  return url.toString();
+}
+
+const POT_VALUE = /^[\w+/.=-]+$/;
+const POTC_VALUE = /^[A-Za-z0-9_-]{1,16}$/;
+
+/** Read a proof-of-origin token from a YouTube request URL. Does not fetch. */
+export function potFromYouTubeUrl(
+  raw: string,
+  origin = 'https://www.youtube.com',
+): { pot: string; potc: string | null } | null {
+  if (!raw || typeof raw !== 'string' || raw.length > 8000) {
+    return null;
+  }
+  let url: URL;
+  try {
+    url = new URL(raw, origin);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' || url.username || url.password) {
+    return null;
+  }
+  if (!isAllowedYouTubeHost(url.hostname)) {
+    return null;
+  }
+  const pot = url.searchParams.get('pot');
+  if (!pot || pot.length < 8 || pot.length > 2048 || !POT_VALUE.test(pot)) {
+    return null;
+  }
+  const potc = url.searchParams.get('potc');
+  return {
+    pot,
+    potc: potc && POTC_VALUE.test(potc) ? potc : null,
+  };
+}
+
+/** Attach a harvested pot only when the timedtext URL does not already have one. */
+export function withTimedTextPot(
+  raw: string,
+  pot: string,
+  potc?: string | null,
+  origin = 'https://www.youtube.com',
+): string | null {
+  const safe = toSafeTimedTextUrl(raw, origin);
+  if (!safe || !POT_VALUE.test(pot) || pot.length < 8 || pot.length > 2048) {
+    return safe;
+  }
+  const url = new URL(safe);
+  if (!url.searchParams.get('pot')) {
+    url.searchParams.set('pot', pot);
+    if (potc && POTC_VALUE.test(potc)) {
+      url.searchParams.set('potc', potc);
+    }
+  }
+  if (url.toString().length > 4000) {
+    return safe;
+  }
+  return toSafeTimedTextUrl(url.toString(), origin);
 }
 
 export function selectCaptionTrack(

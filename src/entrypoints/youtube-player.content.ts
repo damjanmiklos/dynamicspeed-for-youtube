@@ -1,12 +1,30 @@
 import { emitBridgeEvent, listenToIsolatedRequests } from '../lib/bridge/main';
 import type { CaptionTrackPayload, PlayerSnapshot } from '../lib/bridge/protocol';
-import { toSafeTimedTextUrl, videoIdFromTimedTextUrl } from '../lib/transcript/select-track';
+import {
+  bindTimedTextToVideo,
+  potFromYouTubeUrl,
+  selectCaptionTrack,
+  toSafeTimedTextUrl,
+  videoIdFromTimedTextUrl,
+  withTimedTextPot,
+} from '../lib/transcript/select-track';
 import { MAX_CAPTION_BYTES } from '../lib/transcript/limits';
 import { parseVideoId, isShortsPath, YOUTUBE_MATCHES } from '../lib/youtube/video-id';
 import {
   playerResponseBelongsToVideo,
   readVisibleWatchTitle,
 } from '../lib/youtube/watch-meta';
+import {
+  captionTrackOptionForLanguage,
+  enableCaptionsForCapture,
+  hideCaptionFlash,
+  parseAcquireCaptionPrefs,
+  readSavedCaptionState,
+  restoreSavedCaptionState,
+  showCaptionFlash,
+  userWantedCaptionsOn,
+  type CaptionPlayer,
+} from '../lib/youtube/caption-nudge';
 
 type PlayerResponse = {
   videoDetails?: {
@@ -38,7 +56,7 @@ type PlayerResponse = {
   };
 };
 
-type YTPlayer = {
+type YTPlayer = CaptionPlayer & {
   getPlayerResponse?: () => PlayerResponse;
   getVideoData?: () => { video_id?: string; title?: string; author?: string };
   getDuration?: () => number;
@@ -82,6 +100,7 @@ function titleFromPlayer(): string | null {
 }
 
 function tracksFrom(response: PlayerResponse | null): CaptionTrackPayload[] {
+  const videoId = parseVideoId(location.href);
   const tracks =
     response?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
   const allowed: CaptionTrackPayload[] = [];
@@ -89,7 +108,9 @@ function tracksFrom(response: PlayerResponse | null): CaptionTrackPayload[] {
     if (!track.baseUrl) {
       continue;
     }
-    const baseUrl = toSafeTimedTextUrl(track.baseUrl);
+    const baseUrl = videoId
+      ? bindTimedTextToVideo(track.baseUrl, videoId)
+      : toSafeTimedTextUrl(track.baseUrl);
     if (!baseUrl) {
       continue;
     }
@@ -164,7 +185,15 @@ function readYtcfg(key: string): string | null {
   return typeof fromData === 'string' && fromData.length > 0 ? fromData : null;
 }
 
-async function innertubePlayer(videoId: string, client: 'WEB' | 'ANDROID'): Promise<PlayerResponse | null> {
+/** Public Android player client string, not a secret. WEB version on ANDROID often fails. */
+const ANDROID_INNERTUBE_VERSION = '19.47.7';
+const MAX_TRACK_ATTEMPTS = 2;
+
+async function innertubePlayer(
+  videoId: string,
+  client: 'WEB' | 'ANDROID',
+  signal?: AbortSignal,
+): Promise<PlayerResponse | null> {
   if (!/^[\w-]{11}$/.test(videoId)) {
     return null;
   }
@@ -172,18 +201,18 @@ async function innertubePlayer(videoId: string, client: 'WEB' | 'ANDROID'): Prom
   if (!apiKey) {
     return null;
   }
-  const clientVersion = readYtcfg('INNERTUBE_CLIENT_VERSION');
-  if (!clientVersion) {
+  const webVersion = readYtcfg('INNERTUBE_CLIENT_VERSION');
+  if (client === 'WEB' && !webVersion) {
     return null;
   }
   const body = {
     context: {
       client:
         client === 'WEB'
-          ? { clientName: 'WEB' as const, clientVersion, hl: 'en', gl: 'US' }
+          ? { clientName: 'WEB' as const, clientVersion: webVersion, hl: 'en', gl: 'US' }
           : {
               clientName: 'ANDROID' as const,
-              clientVersion,
+              clientVersion: ANDROID_INNERTUBE_VERSION,
               androidSdkVersion: 30,
               hl: 'en',
               gl: 'US',
@@ -200,6 +229,7 @@ async function innertubePlayer(videoId: string, client: 'WEB' | 'ANDROID'): Prom
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
       credentials: 'include',
+      signal,
     },
   );
   if (!response.ok) {
@@ -227,20 +257,7 @@ function snapshotFrom(response: PlayerResponse | null): PlayerSnapshot {
   };
 }
 
-async function fetchAllowlistedTimedText(baseUrl: string): Promise<unknown | null> {
-  const safe = toSafeTimedTextUrl(baseUrl);
-  if (!safe) {
-    return null;
-  }
-  const timed = await fetch(safe, { credentials: 'include' });
-  if (!timed.ok) {
-    return null;
-  }
-  const declared = Number(timed.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > MAX_CAPTION_BYTES) {
-    return null;
-  }
-  const text = await timed.text();
+function parseTimedTextBody(text: string): unknown | null {
   if (text.length > MAX_CAPTION_BYTES) {
     return null;
   }
@@ -255,28 +272,68 @@ async function fetchAllowlistedTimedText(baseUrl: string): Promise<unknown | nul
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function xhrGetText(
+  url: string,
+  signal?: AbortSignal,
+  timeoutMs = 5000,
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve(null);
+      return;
+    }
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.timeout = timeoutMs;
+    xhr.withCredentials = true;
+    const finish = (text: string | null) => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve(text);
+    };
+    const onAbort = () => {
+      xhr.abort();
+      finish(null);
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    xhr.onload = () => {
+      finish(xhr.status >= 200 && xhr.status < 300 ? xhr.responseText : null);
+    };
+    xhr.onerror = () => finish(null);
+    xhr.ontimeout = () => finish(null);
+    xhr.send();
+  });
+}
+
 let lastCapture: { videoId: string; data: unknown } | null = null;
+let lastPot: { pot: string; potc: string | null } | null = null;
+let captureEnabled = false;
+let captureHold = false;
+let fallbackAbort: AbortController | null = null;
+
+function shouldCloneTimedText(): boolean {
+  return captureEnabled || captureHold;
+}
+
+function noteYouTubeUrl(url: string): void {
+  const pot = potFromYouTubeUrl(url);
+  if (pot) {
+    lastPot = pot;
+  }
+}
 
 function rememberTimedTextBody(url: string, body: unknown): void {
-  if (!toSafeTimedTextUrl(url) || body == null) {
+  if (!shouldCloneTimedText() || !toSafeTimedTextUrl(url) || body == null) {
     return;
   }
   let data: object | null = null;
   if (typeof body === 'string') {
-    const trimmed = body.trim();
-    if (trimmed.length > MAX_CAPTION_BYTES) {
-      return;
-    }
-    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-      return;
-    }
-    try {
-      const parsed: unknown = JSON.parse(trimmed);
-      if (typeof parsed === 'object' && parsed !== null) {
-        data = parsed;
-      }
-    } catch {
-      return;
+    const parsed = parseTimedTextBody(body);
+    if (parsed && typeof parsed === 'object') {
+      data = parsed;
     }
   } else if (typeof body === 'object') {
     data = body;
@@ -292,6 +349,52 @@ function rememberTimedTextBody(url: string, body: unknown): void {
   }
 }
 
+function uniqueUrls(urls: Array<string | null | undefined>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const url of urls) {
+    if (!url || seen.has(url)) {
+      continue;
+    }
+    seen.add(url);
+    out.push(url);
+  }
+  return out;
+}
+
+async function fetchAllowlistedTimedText(
+  baseUrl: string,
+  signal?: AbortSignal,
+  timeoutMs = 5000,
+): Promise<unknown | null> {
+  const videoId = parseVideoId(location.href) ?? '';
+  const bound = videoId ? bindTimedTextToVideo(baseUrl, videoId) : toSafeTimedTextUrl(baseUrl);
+  if (!bound) {
+    return null;
+  }
+  const withPot =
+    lastPot && !new URL(bound).searchParams.get('pot')
+      ? withTimedTextPot(bound, lastPot.pot, lastPot.potc)
+      : null;
+  for (const url of uniqueUrls([withPot, bound])) {
+    if (signal?.aborted) {
+      return null;
+    }
+    try {
+      const text = await xhrGetText(url, signal, timeoutMs);
+      const json = text ? parseTimedTextBody(text) : null;
+      if (json) {
+        return json;
+      }
+    } catch {
+      if (signal?.aborted) {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
 const FETCH_HOOK_FLAG = '__dsTimedTextFetchHooked';
 
 function installTimedtextObserver(): void {
@@ -303,18 +406,19 @@ function installTimedtextObserver(): void {
 
   const originalFetch = window.fetch.bind(window);
   window.fetch = async (...args: Parameters<typeof fetch>) => {
+    const raw = args[0];
+    const url =
+      typeof raw === 'string'
+        ? raw
+        : raw instanceof URL
+          ? raw.toString()
+          : raw instanceof Request
+            ? raw.url
+            : '';
+    noteYouTubeUrl(url);
     const response = await originalFetch(...args);
     try {
-      const raw = args[0];
-      const url =
-        typeof raw === 'string'
-          ? raw
-          : raw instanceof URL
-            ? raw.toString()
-            : raw instanceof Request
-              ? raw.url
-              : '';
-      if (toSafeTimedTextUrl(url)) {
+      if (shouldCloneTimedText() && toSafeTimedTextUrl(url)) {
         const clone = response.clone();
         void clone.text().then((text) => {
           if (text.length <= MAX_CAPTION_BYTES) {
@@ -332,8 +436,9 @@ function installTimedtextObserver(): void {
   const xhrSend = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.open = function (this: XMLHttpRequest, ...args: unknown[]) {
     const url = args[1];
-    (this as XMLHttpRequest & { __dsTimedTextUrl?: string }).__dsTimedTextUrl =
-      typeof url === 'string' ? url : String(url ?? '');
+    const href = typeof url === 'string' ? url : String(url ?? '');
+    (this as XMLHttpRequest & { __dsTimedTextUrl?: string }).__dsTimedTextUrl = href;
+    noteYouTubeUrl(href);
     return xhrOpen.apply(this, args as Parameters<XMLHttpRequest['open']>);
   };
   XMLHttpRequest.prototype.send = function (
@@ -343,7 +448,7 @@ function installTimedtextObserver(): void {
     const url =
       (this as XMLHttpRequest & { __dsTimedTextUrl?: string }).__dsTimedTextUrl ??
       '';
-    if (toSafeTimedTextUrl(url)) {
+    if (shouldCloneTimedText() && toSafeTimedTextUrl(url)) {
       this.addEventListener('load', () => {
         const payload =
           this.responseType === 'json' ? this.response : this.responseText;
@@ -364,59 +469,229 @@ function captureMatchesVideo(videoId: string): unknown | null {
   return null;
 }
 
-/** Use a timedtext body YouTube already fetched. Never toggle the CC button. */
-async function waitForPassiveCapture(
-  videoId: string,
-  timeoutMs: number,
-): Promise<unknown | null> {
-  const existing = captureMatchesVideo(videoId);
-  if (existing) {
-    return existing;
+function rankTracks(
+  tracks: CaptionTrackPayload[],
+  prefs: { language: string; preferManual: boolean },
+): CaptionTrackPayload[] {
+  const selected = selectCaptionTrack(tracks, prefs);
+  if (!selected) {
+    return tracks;
   }
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const hit = captureMatchesVideo(videoId);
-    if (hit) {
-      return hit;
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, 100));
-  }
-  return captureMatchesVideo(videoId);
+  return [selected, ...tracks.filter((track) => track.baseUrl !== selected.baseUrl)];
 }
 
-let fallbackInFlight: Promise<unknown> | null = null;
-
-async function acquireFallbackTranscriptNow(): Promise<unknown> {
-  const videoId = parseVideoId(location.href) ?? '';
-  const captured = await waitForPassiveCapture(videoId, 600);
-  if (captured) {
-    return captured;
-  }
-  let response = readPlayerResponse();
-  if (!tracksFrom(response).length && videoId) {
-    response =
-      (await innertubePlayer(videoId, 'WEB')) ??
-      (await innertubePlayer(videoId, 'ANDROID')) ??
-      response;
-  }
-  const track = tracksFrom(response)[0];
-  if (track) {
-    const json = await fetchAllowlistedTimedText(track.baseUrl);
+async function jsonFromTracks(
+  tracks: CaptionTrackPayload[],
+  prefs: { language: string; preferManual: boolean },
+  signal?: AbortSignal,
+  timeoutMs = 5000,
+): Promise<unknown | null> {
+  for (const track of rankTracks(tracks, prefs).slice(0, MAX_TRACK_ATTEMPTS)) {
+    if (signal?.aborted) {
+      return null;
+    }
+    const json = await fetchAllowlistedTimedText(track.baseUrl, signal, timeoutMs);
     if (json) {
       return json;
     }
   }
-  return scrapeDomTranscript();
+  return null;
 }
 
-async function acquireFallbackTranscript(): Promise<unknown> {
-  if (fallbackInFlight) {
-    return fallbackInFlight;
+async function waitForPlayer(signal: AbortSignal, timeoutMs: number): Promise<YTPlayer | null> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (signal.aborted) {
+      return null;
+    }
+    const player = moviePlayer();
+    if (player) {
+      return player;
+    }
+    await sleep(80);
   }
-  fallbackInFlight = acquireFallbackTranscriptNow().finally(() => {
-    fallbackInFlight = null;
+  return moviePlayer();
+}
+
+async function waitForCapture(
+  videoId: string,
+  signal: AbortSignal,
+  timeoutMs: number,
+): Promise<unknown | null> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (signal.aborted) {
+      return null;
+    }
+    const hit = captureMatchesVideo(videoId);
+    if (hit) {
+      return hit;
+    }
+    await sleep(80);
+  }
+  return captureMatchesVideo(videoId);
+}
+
+let captionSession = Promise.resolve();
+
+async function withCaptionSession<T>(work: () => Promise<T>): Promise<T> {
+  const previous = captionSession;
+  let release: () => void = () => undefined;
+  captionSession = new Promise<void>((resolve) => {
+    release = resolve;
   });
-  return fallbackInFlight;
+  await previous;
+  try {
+    return await work();
+  } finally {
+    release();
+  }
+}
+
+async function captureViaCaptionNudge(
+  videoId: string,
+  prefs: { language: string; preferManual: boolean },
+  signal: AbortSignal,
+): Promise<unknown | null> {
+  return withCaptionSession(async () => {
+    const player = await waitForPlayer(signal, 2000);
+    if (!player || signal.aborted) {
+      return null;
+    }
+    const saved = readSavedCaptionState(player, document);
+    const hideFlash = !userWantedCaptionsOn(saved);
+    captureHold = true;
+    if (hideFlash) {
+      hideCaptionFlash(document);
+    }
+    const selected = selectCaptionTrack(tracksFrom(readPlayerResponse()), prefs);
+    const option = captionTrackOptionForLanguage(selected, prefs.language);
+    const languageFallbacks = uniqueUrls([
+      option.languageCode,
+      prefs.language,
+      prefs.language.includes('-') ? prefs.language.slice(0, 2) : `${prefs.language}-US`,
+    ]).filter((code) => code.length >= 2);
+
+    try {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (signal.aborted) {
+          return null;
+        }
+        const languageCode = languageFallbacks[attempt] ?? option.languageCode;
+        await enableCaptionsForCapture(
+          player,
+          document,
+          { ...option, languageCode },
+          sleep,
+        );
+        const hit = await waitForCapture(videoId, signal, 2200 + attempt * 600);
+        if (hit) {
+          return hit;
+        }
+        const afterPot = await jsonFromTracks(
+          tracksFrom(readPlayerResponse()),
+          prefs,
+          signal,
+          2500,
+        );
+        if (afterPot) {
+          return afterPot;
+        }
+      }
+      return captureMatchesVideo(videoId);
+    } finally {
+      captureHold = false;
+      try {
+        await restoreSavedCaptionState(player, document, saved, sleep);
+      } finally {
+        showCaptionFlash(document);
+      }
+    }
+  });
+}
+
+async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> {
+  fallbackAbort?.abort();
+  const abort = new AbortController();
+  fallbackAbort = abort;
+  const prefs = parseAcquireCaptionPrefs(payload);
+  const videoId = parseVideoId(location.href) ?? '';
+  const captured = captureMatchesVideo(videoId);
+  if (captured) {
+    return captured;
+  }
+
+  const tryTracks = async (tracks: CaptionTrackPayload[], timeoutMs = 5000) => {
+    if (abort.signal.aborted) {
+      return null;
+    }
+    return jsonFromTracks(tracks, prefs, abort.signal, timeoutMs);
+  };
+
+  const playerTracks = tracksFrom(readPlayerResponse());
+  const fromPlayer = await tryTracks(playerTracks, prefs.nudgeCaptions ? 2000 : 5000);
+  if (fromPlayer) {
+    return fromPlayer;
+  }
+
+  if (prefs.nudgeCaptions && videoId) {
+    try {
+      const nudged = await captureViaCaptionNudge(videoId, prefs, abort.signal);
+      if (nudged) {
+        return nudged;
+      }
+    } catch {
+      if (abort.signal.aborted) {
+        return null;
+      }
+    }
+  }
+
+  if (videoId) {
+    try {
+      const android = await innertubePlayer(videoId, 'ANDROID', abort.signal);
+      const fromAndroid = await tryTracks(tracksFrom(android));
+      if (fromAndroid) {
+        return fromAndroid;
+      }
+    } catch {
+      if (abort.signal.aborted) {
+        return null;
+      }
+    }
+    try {
+      const web = await innertubePlayer(videoId, 'WEB', abort.signal);
+      const fromWeb = await tryTracks(tracksFrom(web));
+      if (fromWeb) {
+        return fromWeb;
+      }
+    } catch {
+      if (abort.signal.aborted) {
+        return null;
+      }
+    }
+  }
+
+  if (abort.signal.aborted) {
+    return null;
+  }
+  const fromDom = scrapeDomTranscript();
+  if (fromDom) {
+    return fromDom;
+  }
+
+  if (prefs.nudgeCaptions && videoId && !abort.signal.aborted) {
+    try {
+      return await captureViaCaptionNudge(videoId, prefs, abort.signal);
+    } catch {
+      return captureMatchesVideo(videoId);
+    }
+  }
+  return captureMatchesVideo(videoId);
+}
+
+async function acquireFallbackTranscript(payload: unknown): Promise<unknown> {
+  return acquireFallbackTranscriptNow(payload);
 }
 
 export default defineContentScript({
@@ -430,6 +705,14 @@ export default defineContentScript({
         return snapshotFrom(readPlayerResponse());
       },
       acquireFallbackTranscript,
+      setCaptureEnabled(enabled) {
+        captureEnabled = enabled;
+        if (!enabled) {
+          lastCapture = null;
+          fallbackAbort?.abort();
+          fallbackAbort = null;
+        }
+      },
     });
 
     let lastId = parseVideoId(location.href);
@@ -444,7 +727,7 @@ export default defineContentScript({
       }
       const snapshot = snapshotFrom(readPlayerResponse());
       const videoId = snapshot.videoId ?? id;
-      if (videoId && snapshot.tracks.length > 0) {
+      if (captureEnabled && videoId && snapshot.tracks.length > 0) {
         const key = `${videoId}:${snapshot.tracks.length}`;
         if (key !== lastTrackKey) {
           lastTrackKey = key;

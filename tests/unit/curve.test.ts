@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildSpeedCurve,
+  mergeShortChunks,
   rateAt,
   type CurveBuildOptions,
 } from '../../src/lib/pacing/curve';
@@ -14,7 +15,7 @@ const options = (overrides: Partial<CurveBuildOptions> = {}): CurveBuildOptions 
   targetWpm: 180,
   minSpeed: 0.75,
   maxSpeed: 3,
-  minChunkSec: 0.3,
+  minChunkSec: 0.15,
   wpmFloor: 60,
   wpmCeil: 450,
   longPauseSec: 1.8,
@@ -67,6 +68,17 @@ describe('speed curve', () => {
     assertFiniteCurve(tokens);
   });
 
+  it('does not glue typical spoken words at the 0.15s default', () => {
+    const tokens = [
+      token(0, 0.22, 'so'),
+      token(0.22, 0.44, 'you'),
+      token(0.44, 0.88, 'remember', { syllables: 3 }),
+    ];
+    const opts = { syllableWeighting: true, jargonCompensation: 1.15 };
+    expect(mergeShortChunks(tokens, 0.15, opts)).toHaveLength(3);
+    expect(mergeShortChunks(tokens, 0.3, opts).length).toBeLessThan(3);
+  });
+
   it('returns a finite 1× curve for empty captions', () => {
     const curve = assertFiniteCurve([], options({ durationHint: 10 }));
     expect(rateAt(curve, 0)).toBeCloseTo(1, 5);
@@ -98,6 +110,36 @@ describe('speed curve', () => {
     ];
     const curve = buildSpeedCurve(tokens, options({ bRollAcceleration: true, maxSpeed: 3 }));
     expect(rateAt(curve, 5)).toBeGreaterThan(2.2);
+  });
+
+  it('uses [Music] as b-roll without a per-chunk scan of every token', () => {
+    const tokens = [
+      token(0, 1, 'hello', { syllables: 2 }),
+      token(1.1, 2.1, 'there', { syllables: 1 }),
+      token(2.2, 3.4, '[Music]', { meta: true, syllables: 0 }),
+      token(3.5, 4.5, 'later', { syllables: 2 }),
+    ];
+    const curve = buildSpeedCurve(
+      tokens,
+      options({
+        bRollAcceleration: true,
+        treatMusicAsBRoll: true,
+        maxSpeed: 3,
+        longPauseSec: 1.8,
+      }),
+    );
+    expect(rateAt(curve, 2.8)).toBeGreaterThan(2.2);
+  });
+
+  it('builds a multi-hour-length token stream quickly', () => {
+    const tokens: WordToken[] = [];
+    for (let i = 0; i < 12_000; i += 1) {
+      const t0 = i * 0.22;
+      tokens.push(token(t0, t0 + 0.18, 'word'));
+    }
+    const started = Date.now();
+    assertFiniteCurve(tokens, options({ bRollAcceleration: false }));
+    expect(Date.now() - started).toBeLessThan(1500);
   });
 
   it('ignores music meta when computing speech WPM', () => {

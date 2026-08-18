@@ -1,5 +1,6 @@
 import {
   DynamicSpeedSettingsSchema,
+  SETTINGS_VERSION,
   type DynamicSpeedSettings,
 } from './schema';
 
@@ -62,5 +63,15 @@ export function parseSettings(input: unknown): DynamicSpeedSettings {
 }
 
 export function migrateSettings(input: unknown): DynamicSpeedSettings {
-  return parseSettings(input);
+  const source = copyPlain(input);
+  const previousVersion =
+    typeof source.version === 'number' && Number.isFinite(source.version)
+      ? source.version
+      : 1;
+  // v1 defaulted minChunkSec to 0.3s, which glued ordinary words together.
+  if (previousVersion < 2 && source.minChunkSec === 0.3) {
+    source.minChunkSec = 0.15;
+  }
+  source.version = Math.max(previousVersion, SETTINGS_VERSION);
+  return parseSettings(source);
 }

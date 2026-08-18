@@ -152,6 +152,21 @@ describe('filters', () => {
     expect(left[0].value).toBeCloseTo(100, 6);
     expect(right[0].value).toBeCloseTo(300, 6);
   });
+
+  it('smooths a long sorted series without a quadratic scan', () => {
+    const samples = Array.from({ length: 8_000 }, (_, i) => ({
+      t: i * 0.2,
+      value: 150 + (i % 5),
+    }));
+    const started = Date.now();
+    const gaussian = gaussianSmooth(samples, 10);
+    const medianed = movingMedian(samples, 6);
+    expect(Date.now() - started).toBeLessThan(800);
+    expect(gaussian).toHaveLength(samples.length);
+    expect(medianed).toHaveLength(samples.length);
+    expect(gaussian[4000].value).toBeGreaterThan(140);
+    expect(gaussian[4000].value).toBeLessThan(170);
+  });
 });
 
 describe('jargon', () => {

@@ -8,7 +8,7 @@ export const SETTINGS_HELP = {
     label: 'About Enable',
     body: [
       'Master switch for DynamicSpeed. When this is on, the extension reads captions on this device and continuously sets YouTube’s playback rate so spoken words land near your Target WPM.',
-      'When it is off, DynamicSpeed stops driving speed. If Restore 1× when disabled is also on, playback is put back to 1×. Channel rules, shortcuts, and the player chip still exist, but automation does not run.',
+      'When it is off, DynamicSpeed does not fetch, capture, parse, or cache captions, and it does not drive playback rate. If Restore 1× when disabled is also on, playback is put back to 1×. The toolbar popup, shortcuts, and player chip still work so you can turn it back on.',
       'You can also flip this from the toolbar popup, by clicking the player chip, or with Alt+Shift+D.',
     ],
   },
@@ -50,6 +50,14 @@ export const SETTINGS_HELP = {
       'One “feel” control that sets how quickly speed is allowed to change. It does not change Target WPM; it changes how much the speed curve is smoothed and how fast playback rate may slew toward that curve.',
       'Low is molasses-smooth: a wide Gaussian window (~18 s), a wide median window (~10 s), and a slow slew cap (~0.12× per second). High reacts sooner: tighter windows (~5 s and ~3 s) and a faster slew cap (~0.9× per second).',
       'If you unlock custom dynamics, this slider becomes display-only. The Gaussian, median, and slew sliders on the Pacing engine page then take over.',
+    ],
+  },
+  temporarilyEnableCaptions: {
+    label: 'About temporarily turning on captions',
+    body: [
+      'When this is on, DynamicSpeed may briefly turn on YouTube’s own captions so the player downloads timed caption data with a valid token. That download is copied in the background, then captions are put back to whatever you had before — on or off.',
+      'If you had captions off, the on-screen text is hidden during the grab so it is only a short flash, if anything. If you already had captions on, they stay on.',
+      'Turn this off to never touch YouTube’s CC button. Background-only loading is less reliable: YouTube often will not send caption timings unless captions are turned on, so the transcript (and therefore speed control) may fail to load.',
     ],
   },
   captionLanguage: {
@@ -119,8 +127,8 @@ export const SETTINGS_HELP = {
   minChunk: {
     label: 'About minimum caption chunk',
     body: [
-      'Caption words shorter than this duration are merged with their neighbors before WPM is computed. Auto-captions often emit tiny fragments that would otherwise look like impossibly fast or slow speech.',
-      'Raising this makes the curve calmer and treats a phrase as one unit. Lowering it preserves more of the original word timings, which can be more accurate on clean manual captions and noisier on ASR.',
+      'Caption words shorter than this are merged with their neighbors before WPM is computed. Auto-captions sometimes emit crumbs only tens of milliseconds long that would look like impossibly fast speech.',
+      'The default is 0.15s, a bit under a typical spoken word (about 0.20–0.25s) so real words stay separate. 0.3s is long enough to glue two or three ordinary words into one sample and hide pace changes. Raise it if a track is very choppy; lower it toward 0.10s to follow word timings more closely.',
       'This does not change what you see on screen as subtitles; it only changes the timeline DynamicSpeed uses internally.',
     ],
   },

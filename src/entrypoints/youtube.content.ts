@@ -1,4 +1,4 @@
-import { listenToMainEvents } from '../lib/bridge/isolated';
+import { listenToMainEvents, requestFromMain } from '../lib/bridge/isolated';
 import { loadSettings, patchSettings, watchSettings } from '../lib/settings/storage';
 import { captionSourceChanged } from '../lib/settings/diff';
 import { LIMITS } from '../lib/settings/limits';
@@ -22,6 +22,7 @@ export default defineContentScript({
   main(ctx) {
     let snapshot: PlayerSnapshot | null = null;
     let loadGeneration = 0;
+    let loadAbort: AbortController | null = null;
     let appliedSettings: DynamicSpeedSettings | null = null;
     const controller = createPlaybackController({
       getChannel: () => {
@@ -37,13 +38,41 @@ export default defineContentScript({
       },
     });
 
+    const setMainCaptureEnabled = async (enabled: boolean) => {
+      const videoId = parseVideoId(location.href) ?? '';
+      await requestFromMain('SET_CAPTURE_ENABLED', videoId, { enabled }, 2000).catch(
+        () => undefined,
+      );
+    };
+
+    const stopCaptionWork = () => {
+      loadGeneration += 1;
+      loadAbort?.abort();
+      loadAbort = null;
+      void setMainCaptureEnabled(false);
+      controller.setTokens([], 'idle');
+    };
+
     const loadForCurrentVideo = async () => {
+      loadAbort?.abort();
+      const abort = new AbortController();
+      loadAbort = abort;
       const gen = ++loadGeneration;
       const settings = await loadSettings();
       if (gen !== loadGeneration) {
         return;
       }
       appliedSettings = settings;
+      if (!settings.enabled) {
+        void setMainCaptureEnabled(false);
+        controller.setTokens([], 'idle');
+        controller.setSettings(settings);
+        return;
+      }
+      await setMainCaptureEnabled(true);
+      if (gen !== loadGeneration) {
+        return;
+      }
       controller.setSettings(settings);
       const videoId = parseVideoId(location.href);
       if (!videoId) {
@@ -51,11 +80,11 @@ export default defineContentScript({
         return;
       }
       controller.setTranscriptStatus('loading');
-      const deadline = Date.now() + 20_000;
+      const deadline = Date.now() + (settings.temporarilyEnableCaptions ? 32_000 : 20_000);
       let lastError: unknown;
-      while (Date.now() < deadline && gen === loadGeneration) {
+      while (Date.now() < deadline && gen === loadGeneration && !abort.signal.aborted) {
         try {
-          const result = await acquireTranscript(settings);
+          const result = await acquireTranscript(settings, { signal: abort.signal });
           if (gen !== loadGeneration) {
             return;
           }
@@ -65,11 +94,19 @@ export default defineContentScript({
             return;
           }
         } catch (error) {
+          if (abort.signal.aborted || gen !== loadGeneration) {
+            return;
+          }
           lastError = error;
         }
-        await new Promise((resolve) => window.setTimeout(resolve, 400));
+        if (gen !== loadGeneration || abort.signal.aborted) {
+          return;
+        }
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, settings.temporarilyEnableCaptions ? 900 : 400),
+        );
       }
-      if (gen !== loadGeneration) {
+      if (gen !== loadGeneration || abort.signal.aborted) {
         return;
       }
       controller.setTokens([], 'missing');
@@ -81,9 +118,15 @@ export default defineContentScript({
 
     const applySettings = (settings: DynamicSpeedSettings) => {
       const previous = appliedSettings;
+      const turningOn = Boolean(previous && !previous.enabled && settings.enabled);
       appliedSettings = settings;
+      if (!settings.enabled) {
+        stopCaptionWork();
+        controller.setSettings(settings);
+        return;
+      }
       controller.setSettings(settings);
-      if (previous && captionSourceChanged(previous, settings)) {
+      if (turningOn || (previous && captionSourceChanged(previous, settings))) {
         void loadForCurrentVideo();
       }
     };
@@ -103,11 +146,17 @@ export default defineContentScript({
 
     const unlisten = listenToMainEvents((name) => {
       if (name === 'VIDEO_ID_CHANGED') {
+        snapshot = null;
+        if (appliedSettings && !appliedSettings.enabled) {
+          return;
+        }
         if (!parseVideoId(location.href)) {
           return;
         }
-        snapshot = null;
         void loadForCurrentVideo();
+        return;
+      }
+      if (appliedSettings && !appliedSettings.enabled) {
         return;
       }
       if (name === 'TIMEDTEXT_CAPTURED' || name === 'RAW_TRACKS_RESOLVED') {
@@ -233,6 +282,7 @@ export default defineContentScript({
     browser.runtime.onMessage.addListener(onMessage);
 
     ctx.onInvalidated(() => {
+      stopCaptionWork();
       unwatch();
       unlisten();
       browser.runtime.onMessage.removeListener(onMessage);

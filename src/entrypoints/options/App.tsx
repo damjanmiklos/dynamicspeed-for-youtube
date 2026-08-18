@@ -165,7 +165,7 @@ export function OptionsApp() {
                 DynamicSpeed reads YouTube captions on your device and sets playback speed so
                 speech lands near your target words-per-minute.
               </p>
-              <Row title="Enable" hint="Master switch for automatic speed control." help={SETTINGS_HELP.enabled}>
+              <Row title="Enable" hint="Master switch. Off means no caption work and no speed control." help={SETTINGS_HELP.enabled}>
                 <div className="flex justify-end">
                   <Toggle
                     checked={settings.enabled}
@@ -247,6 +247,30 @@ export function OptionsApp() {
                   onChange={(captionLanguage) => void update({ captionLanguage })}
                 />
               </Row>
+              <Row
+                title="Temporarily turn on captions to load"
+                hint="Most reliable. Captions may flash on briefly, then return to your previous setting."
+                help={SETTINGS_HELP.temporarilyEnableCaptions}
+              >
+                <div className="flex justify-end">
+                  <Toggle
+                    checked={settings.temporarilyEnableCaptions}
+                    onChange={(temporarilyEnableCaptions) =>
+                      void update({ temporarilyEnableCaptions })
+                    }
+                  />
+                </div>
+              </Row>
+              {!settings.temporarilyEnableCaptions ? (
+                <div
+                  className="mb-4 rounded-lg border border-ds-warn/40 bg-ds-warn/10 px-3 py-2 text-sm text-ds-warn"
+                  role="status"
+                >
+                  Background-only loading is less reliable. YouTube often will not send
+                  caption timings unless captions are turned on briefly, so the transcript
+                  may fail to load.
+                </div>
+              ) : null}
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <span className="mr-1 inline-flex items-center text-sm font-medium">
                   Backup

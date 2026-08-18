@@ -8,7 +8,8 @@ import {
 
 export type MainBridgeHandlers = {
   getSnapshot: () => PlayerSnapshot;
-  acquireFallbackTranscript: () => Promise<unknown>;
+  acquireFallbackTranscript: (payload: unknown) => Promise<unknown>;
+  setCaptureEnabled: (enabled: boolean) => void;
 };
 
 function reply(request: BridgeMessage, payload: unknown, error?: string): void {
@@ -56,7 +57,18 @@ export function listenToIsolatedRequests(handlers: MainBridgeHandlers): () => vo
           return;
         }
         if (name === 'ACQUIRE_FALLBACK_TRANSCRIPT') {
-          reply(message, await handlers.acquireFallbackTranscript());
+          reply(message, await handlers.acquireFallbackTranscript(message.payload));
+          return;
+        }
+        if (name === 'SET_CAPTURE_ENABLED') {
+          const enabled =
+            Boolean(
+              message.payload &&
+                typeof message.payload === 'object' &&
+                (message.payload as { enabled?: unknown }).enabled === true,
+            );
+          handlers.setCaptureEnabled(enabled);
+          reply(message, { enabled });
           return;
         }
         throw new Error(`Unknown bridge request ${String(name)}`);

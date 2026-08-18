@@ -9,7 +9,7 @@ import {
   CACHE_MAX_VIDEOS,
   formatCacheBytes,
 } from '../../src/lib/youtube/cache';
-import { parseSettings } from '../../src/lib/settings/defaults';
+import { parseSettings, migrateSettings } from '../../src/lib/settings/defaults';
 import { DynamicSpeedSettingsSchema } from '../../src/lib/settings/schema';
 import {
   captionSourceChanged,
@@ -18,11 +18,14 @@ import {
 import { isBridgeMessage, isYouTubeOrigin } from '../../src/lib/bridge/protocol';
 import { isRuntimeMessage } from '../../src/lib/messaging/protocol';
 import {
+  bindTimedTextToVideo,
   forceJson3Url,
+  potFromYouTubeUrl,
   selectCaptionTrack,
   timedTextBelongsToVideo,
   toSafeTimedTextUrl,
   videoIdFromTimedTextUrl,
+  withTimedTextPot,
 } from '../../src/lib/transcript/select-track';
 import { fromCompactTokens } from '../../src/lib/transcript/compact';
 import { parseVideoId, isYouTubeTabUrl } from '../../src/lib/youtube/video-id';
@@ -137,8 +140,19 @@ describe('settings schema', () => {
     const settings = parseSettings({});
     expect(settings.targetWpm).toBe(165);
     expect(settings.fallbackSpeed).toBe(1);
+    expect(settings.minChunkSec).toBe(0.15);
     expect(settings.expireCaptionCacheAfterWeek).toBe(true);
+    expect(settings.temporarilyEnableCaptions).toBe(true);
     expect(settings.minSpeed).toBeLessThan(settings.maxSpeed);
+  });
+
+  it('migrates the old 0.3s min-chunk default without touching a custom value', () => {
+    const migrated = migrateSettings({ version: 1, minChunkSec: 0.3 });
+    expect(migrated.minChunkSec).toBe(0.15);
+    const custom = migrateSettings({ version: 1, minChunkSec: 0.5 });
+    expect(custom.minChunkSec).toBe(0.5);
+    const kept = migrateSettings({ version: 2, minChunkSec: 0.3 });
+    expect(kept.minChunkSec).toBe(0.3);
   });
 
   it('rejects inverted speeds by repairing them', () => {
@@ -185,6 +199,9 @@ describe('settings that change speed', () => {
   it('detects caption source changes that need a new transcript', () => {
     const base = parseSettings({});
     expect(captionSourceChanged(base, { ...base, captionLanguage: 'de' })).toBe(true);
+    expect(
+      captionSourceChanged(base, { ...base, temporarilyEnableCaptions: false }),
+    ).toBe(true);
     expect(captionSourceChanged(base, { ...base, targetWpm: 200 })).toBe(false);
   });
 });
@@ -224,6 +241,29 @@ describe('bridge guards', () => {
     expect(isYouTubeOrigin('https://evil.example')).toBe(false);
     expect(isYouTubeOrigin('https://evil.youtube.com')).toBe(false);
   });
+
+  it('accepts SET_CAPTURE_ENABLED requests and rejects unknown names', () => {
+    expect(
+      isBridgeMessage({
+        source: 'dynamicspeed-player-bridge',
+        type: 'DS_REQUEST',
+        videoId: '',
+        name: 'SET_CAPTURE_ENABLED',
+        requestId: 'abc',
+        payload: { enabled: false },
+      }),
+    ).toBe(true);
+    expect(
+      isBridgeMessage({
+        source: 'dynamicspeed-player-bridge',
+        type: 'DS_REQUEST',
+        videoId: 'dQw4w9WgXcQ',
+        name: 'EXPLOIT',
+        requestId: 'abc',
+        payload: {},
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('caption URL + track pick', () => {
@@ -242,8 +282,8 @@ describe('caption URL + track pick', () => {
     ).toThrow();
     expect(() => forceJson3Url('javascript:alert(1)')).toThrow();
     expect(
-      toSafeTimedTextUrl('https://www.youtube.com/api/timedtext?v=dQw4w9WgXcQ'),
-    ).toContain('/api/timedtext');
+      toSafeTimedTextUrl('http://www.youtube.com/api/timedtext?v=dQw4w9WgXcQ'),
+    ).toMatch(/^https:\/\/www\.youtube\.com\/api\/timedtext/);
     expect(
       toSafeTimedTextUrl('https://user:pass@www.youtube.com/api/timedtext?v=a'),
     ).toBeNull();
@@ -270,6 +310,39 @@ describe('caption URL + track pick', () => {
         'zvCgC1yA7_w',
       ),
     ).toBe(false);
+  });
+
+  it('binds player caption URLs that omit v= to the current video', () => {
+    expect(
+      bindTimedTextToVideo(
+        'https://www.youtube.com/api/timedtext?lang=en&kind=asr',
+        'zvCgC1yA7_w',
+      ),
+    ).toContain('v=zvCgC1yA7_w');
+    expect(
+      bindTimedTextToVideo(
+        'https://www.youtube.com/api/timedtext?v=aaaaaaaaaaa',
+        'zvCgC1yA7_w',
+      ),
+    ).toBeNull();
+  });
+
+  it('copies pot from YouTube URLs onto timedtext and ignores other hosts', () => {
+    const harvested = potFromYouTubeUrl(
+      'https://www.youtube.com/youtubei/v1/player?pot=abcdefghijk&potc=1',
+    );
+    expect(harvested?.pot).toBe('abcdefghijk');
+    expect(harvested?.potc).toBe('1');
+    expect(potFromYouTubeUrl('https://evil.example/youtubei/v1/player?pot=abcdefghijk')).toBe(
+      null,
+    );
+    const withPot = withTimedTextPot(
+      'https://www.youtube.com/api/timedtext?v=zvCgC1yA7_w',
+      'abcdefghijk',
+      '1',
+    );
+    expect(withPot).toContain('pot=abcdefghijk');
+    expect(withPot).toContain('fmt=json3');
   });
 
   it('prefers matching manual tracks', () => {

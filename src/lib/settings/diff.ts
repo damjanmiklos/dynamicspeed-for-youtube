@@ -39,6 +39,7 @@ export function captionSourceChanged(
 ): boolean {
   return (
     previous.captionLanguage !== next.captionLanguage ||
-    previous.preferManualCaptions !== next.preferManualCaptions
+    previous.preferManualCaptions !== next.preferManualCaptions ||
+    previous.temporarilyEnableCaptions !== next.temporarilyEnableCaptions
   );
 }

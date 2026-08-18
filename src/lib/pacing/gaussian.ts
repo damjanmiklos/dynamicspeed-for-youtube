@@ -11,24 +11,36 @@ export function gaussianSmooth(samples: Sample[], sigmaSec: number): Sample[] {
 
   const twoSigma2 = 2 * sigmaSec * sigmaSec;
   const radius = sigmaSec * 4;
+  const n = samples.length;
+  const out: Sample[] = new Array(n);
+  let lo = 0;
+  let hi = 0;
 
-  return samples.map((sample) => {
+  for (let i = 0; i < n; i += 1) {
+    const t = samples[i].t;
+    while (lo < n && t - samples[lo].t > radius) {
+      lo += 1;
+    }
+    if (hi < lo) {
+      hi = lo;
+    }
+    while (hi < n && samples[hi].t - t <= radius) {
+      hi += 1;
+    }
     let weightSum = 0;
     let valueSum = 0;
-    for (const other of samples) {
-      const dt = other.t - sample.t;
-      if (Math.abs(dt) > radius) {
-        continue;
-      }
+    for (let j = lo; j < hi; j += 1) {
+      const dt = samples[j].t - t;
       const weight = Math.exp(-(dt * dt) / twoSigma2);
       weightSum += weight;
-      valueSum += weight * other.value;
+      valueSum += weight * samples[j].value;
     }
-    return {
-      t: sample.t,
-      value: weightSum === 0 ? sample.value : valueSum / weightSum,
+    out[i] = {
+      t,
+      value: weightSum === 0 ? samples[i].value : valueSum / weightSum,
     };
-  });
+  }
+  return out;
 }
 
 /** Causal EMA for live / incomplete transcripts. */

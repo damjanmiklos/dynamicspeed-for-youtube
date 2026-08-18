@@ -155,6 +155,25 @@ export function mapWpmToRate(
   return clamp(targetWpm / wpm, minSpeed, maxSpeed);
 }
 
+function musicCoversGap(
+  music: Interval[],
+  index: { value: number },
+  gapStart: number,
+  gapEnd: number,
+): boolean {
+  let i = index.value;
+  while (i < music.length && music[i].t1 <= gapStart) {
+    i += 1;
+  }
+  index.value = i;
+  for (let k = i; k < music.length && music[k].t0 < gapEnd; k += 1) {
+    if (music[k].t1 > gapStart) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function addKnot(
   times: number[],
   values: number[],
@@ -247,6 +266,10 @@ export function buildSpeedCurve(
   }
   addKnot(wpmT, wpmV, 0, first.wpm);
 
+  const scanMusic = options.bRollAcceleration && options.treatMusicAsBRoll;
+  const music = scanMusic ? musicIntervals(tokens) : [];
+  const musicIndex = { value: 0 };
+
   for (let i = 0; i < smoothedChunks.length; i += 1) {
     const chunk = smoothedChunks[i];
     const rate = mapWpmToRate(
@@ -264,11 +287,7 @@ export function buildSpeedCurve(
     }
     const gap = next.t0 - chunk.t1;
     const musicHit =
-      options.treatMusicAsBRoll &&
-      tokens.some(
-        (token) =>
-          token.meta && token.t0 < next.t0 && token.t1 > chunk.t1,
-      );
+      scanMusic && musicCoversGap(music, musicIndex, chunk.t1, next.t0);
     const isPause = gap > options.longPauseSec || musicHit;
     if (isPause && options.bRollAcceleration) {
       const mid = (chunk.t1 + next.t0) / 2;

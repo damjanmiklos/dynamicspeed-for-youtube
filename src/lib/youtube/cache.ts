@@ -10,6 +10,7 @@ import type { CompactWordToken, WordToken } from '../transcript/types';
 export const CACHE_BYTE_BUDGET = 4 * 1024 * 1024;
 export const CACHE_MAX_VIDEOS = 15;
 export const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const CACHE_TOUCH_MIN_MS = 12 * 60 * 60 * 1000;
 
 export type TranscriptCacheEntry = {
   key: string;
@@ -289,6 +290,8 @@ export async function recallTokens(
   }
   const tokens = memoryGet(key) ?? fromCompactTokens(entry.tokens);
   memorySet(key, tokens);
-  await saveTranscriptCache(touchCacheEntry(store, key));
+  if (Date.now() - entry.savedAt >= CACHE_TOUCH_MIN_MS) {
+    await saveTranscriptCache(touchCacheEntry(store, key));
+  }
   return tokens;
 }

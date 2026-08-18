@@ -25,16 +25,30 @@ export function movingMedian(
     return [];
   }
   const half = Math.max(windowSec, 0) / 2;
-  return samples.map((sample, index) => {
+  const n = samples.length;
+  const out: Sample[] = new Array(n);
+  let lo = 0;
+  let hi = 0;
+
+  for (let i = 0; i < n; i += 1) {
+    const t = samples[i].t;
+    while (lo < n && t - samples[lo].t > half) {
+      lo += 1;
+    }
+    if (hi < lo) {
+      hi = lo;
+    }
+    while (hi < n && samples[hi].t - t <= half) {
+      hi += 1;
+    }
     const windowValues: number[] = [];
-    for (let j = 0; j < samples.length; j += 1) {
-      if (Math.abs(samples[j].t - sample.t) <= half) {
-        windowValues.push(samples[j].value);
-      }
+    for (let j = lo; j < hi; j += 1) {
+      windowValues.push(samples[j].value);
     }
     if (windowValues.length === 0) {
-      windowValues.push(sample.value);
+      windowValues.push(samples[i].value);
     }
-    return { t: sample.t, value: median(windowValues) };
-  });
+    out[i] = { t, value: median(windowValues) };
+  }
+  return out;
 }

@@ -1,0 +1,18 @@
+{
+  "events": [
+    {
+      "tStartMs": 1000,
+      "dDurationMs": 2400,
+      "segs": [
+        { "utf8": "Hello " },
+        { "tOffsetMs": 400, "utf8": "there " },
+        { "tOffsetMs": 900, "utf8": "friend" }
+      ]
+    },
+    {
+      "tStartMs": 3400,
+      "dDurationMs": 0,
+      "segs": [{ "utf8": "\n" }]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "events": [
+    {
+      "tStartMs": 0,
+      "dDurationMs": 2000,
+      "segs": [{ "utf8": "Welcome back" }]
+    },
+    {
+      "tStartMs": 2500,
+      "dDurationMs": 1800,
+      "segs": [{ "utf8": "[Music]" }]
+    },
+    {
+      "tStartMs": 8000,
+      "dDurationMs": 2000,
+      "segs": [{ "utf8": "Let's continue" }]
+    }
+  ]
+}

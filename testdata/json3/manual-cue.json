@@ -1,0 +1,9 @@
+{
+  "events": [
+    {
+      "tStartMs": 0,
+      "dDurationMs": 6000,
+      "segs": [{ "utf8": "Hi photosynthesis" }]
+    }
+  ]
+}

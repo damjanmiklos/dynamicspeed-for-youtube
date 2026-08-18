@@ -1,0 +1,12 @@
+node_modules
+.output
+.wxt
+dist
+*.zip
+.DS_Store
+scratch/**
+!scratch/.gitkeep
+playwright-report
+test-results
+.env
+*.log

@@ -1,0 +1,38 @@
+{
+  "name": "dynamicspeed-for-youtube",
+  "description": "Automatically match YouTube playback speed to your target words-per-minute.",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox --mv3",
+    "build": "node scripts/build.mjs",
+    "build:chrome": "wxt build -b chrome --mv3",
+    "build:firefox": "wxt build -b firefox --mv3",
+    "zip": "wxt zip -b chrome --mv3 && wxt zip -b firefox --mv3",
+    "compile": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run build:chrome && playwright test",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "syllable": "^5.0.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@tailwindcss/vite": "^4.1.12",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@wxt-dev/module-react": "^1.1.5",
+    "happy-dom": "^18.0.1",
+    "tailwindcss": "^4.1.12",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "wxt": "^0.20.11"
+  }
+}

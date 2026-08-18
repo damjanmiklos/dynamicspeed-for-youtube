@@ -10,6 +10,7 @@ function run(args) {
   const result = spawnSync(npx, args, {
     cwd: root,
     stdio: 'inherit',
+    shell: process.platform === 'win32',
   });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);

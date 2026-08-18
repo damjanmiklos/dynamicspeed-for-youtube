@@ -122,23 +122,37 @@ function scrapeDomTranscript(): unknown | null {
   return { events };
 }
 
-async function innertubePlayer(videoId: string, client: 'WEB' | 'ANDROID'): Promise<PlayerResponse | null> {
+function readYtcfg(key: string): string | null {
   const ytcfg = window.ytcfg;
-  const apiKey =
-    (ytcfg?.get?.('INNERTUBE_API_KEY') as string | undefined) ??
-    'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
-  const clientVersion =
-    client === 'WEB'
-      ? ((ytcfg?.get?.('INNERTUBE_CLIENT_VERSION') as string | undefined) ??
-        '2.20240815.00.00')
-      : '19.09.37';
+  try {
+    const fromGet = ytcfg?.get?.(key);
+    if (typeof fromGet === 'string' && fromGet.length > 0) {
+      return fromGet;
+    }
+  } catch {
+    // ytcfg may not be ready
+  }
+  const data = (ytcfg as { data_?: Record<string, unknown> } | undefined)?.data_;
+  const fromData = data?.[key];
+  return typeof fromData === 'string' && fromData.length > 0 ? fromData : null;
+}
+
+async function innertubePlayer(videoId: string, client: 'WEB' | 'ANDROID'): Promise<PlayerResponse | null> {
+  const apiKey = readYtcfg('INNERTUBE_API_KEY');
+  if (!apiKey) {
+    return null;
+  }
+  const clientVersion = readYtcfg('INNERTUBE_CLIENT_VERSION');
+  if (!clientVersion) {
+    return null;
+  }
   const body = {
     context: {
       client:
         client === 'WEB'
-          ? { clientName: 'WEB', clientVersion, hl: 'en', gl: 'US' }
+          ? { clientName: 'WEB' as const, clientVersion, hl: 'en', gl: 'US' }
           : {
-              clientName: 'ANDROID',
+              clientName: 'ANDROID' as const,
               clientVersion,
               androidSdkVersion: 30,
               hl: 'en',
@@ -150,7 +164,7 @@ async function innertubePlayer(videoId: string, client: 'WEB' | 'ANDROID'): Prom
     racyCheckOk: true,
   };
   const response = await fetch(
-    `/youtubei/v1/player?prettyPrint=false&key=${apiKey}`,
+    `/youtubei/v1/player?prettyPrint=false&key=${encodeURIComponent(apiKey)}`,
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

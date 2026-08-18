@@ -4,6 +4,7 @@ import {
   tokensFromTimedWords,
   type AlignOptions,
 } from './align';
+import { MAX_CAPTION_BYTES, MAX_JSON3_EVENTS, MAX_TOKENS, MAX_WORD_CHARS } from './limits';
 import type { Json3Document, Json3Event, TimedCue, WordToken } from './types';
 
 function eventText(event: Json3Event): string {
@@ -13,7 +14,10 @@ function eventText(event: Json3Event): string {
 }
 
 function cueFromEvent(event: Json3Event): TimedCue | null {
-  const rawText = eventText(event).replace(/\u200b/g, '').trim();
+  if (!event || typeof event !== 'object') {
+    return null;
+  }
+  const rawText = eventText(event).replace(/\u200b/g, '').slice(0, MAX_WORD_CHARS * 40).trim();
   if (!rawText || rawText === '\n') {
     return null;
   }
@@ -35,8 +39,9 @@ function cueFromEvent(event: Json3Event): TimedCue | null {
     const offsetSec =
       typeof seg.tOffsetMs === 'number' ? seg.tOffsetMs / 1000 : 0;
     for (const word of splitWords(piece)) {
+      const text = word.slice(0, MAX_WORD_CHARS);
       words.push({
-        text: word,
+        text,
         t0: t0 + offsetSec,
         hasOffset: hasAnyOffset,
       });
@@ -72,6 +77,9 @@ export function parseJson3(
   input: unknown,
   options: AlignOptions,
 ): WordToken[] {
+  if (typeof input === 'string' && input.length > MAX_CAPTION_BYTES) {
+    return [];
+  }
   const document = (typeof input === 'string' ? JSON.parse(input) : input) as
     | Json3Document
     | null;
@@ -81,8 +89,9 @@ export function parseJson3(
   }
 
   const cues: TimedCue[] = [];
-  for (const event of events) {
-    const cue = cueFromEvent(event);
+  const limited = events.slice(0, MAX_JSON3_EVENTS);
+  for (const event of limited) {
+    const cue = cueFromEvent(event as Json3Event);
     if (cue) {
       cues.push(cue);
     }
@@ -91,6 +100,9 @@ export function parseJson3(
 
   const tokens: WordToken[] = [];
   for (const cue of cues) {
+    if (tokens.length >= MAX_TOKENS) {
+      break;
+    }
     if (isMetaText(cue.rawText)) {
       tokens.push({
         t0: cue.t0,
@@ -122,7 +134,7 @@ export function parseJson3(
   }
 
   tokens.sort((a, b) => a.t0 - b.t0);
-  return tokens;
+  return tokens.slice(0, MAX_TOKENS);
 }
 
 export function parseJson3Safe(

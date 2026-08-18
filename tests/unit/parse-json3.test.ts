@@ -65,4 +65,12 @@ describe('parseJson3', () => {
     );
     expect(tokens.map((token) => token.text).join(' ')).toBe('&lt;script&gt;');
   });
+
+  it('skips corrupt events instead of throwing', () => {
+    const tokens = parseJson3(
+      { events: [null, 1, { tStartMs: 0, dDurationMs: 500, segs: [{ utf8: 'Hi' }] }] },
+      { syllableWeighting: false },
+    );
+    expect(tokens.map((token) => token.text)).toEqual(['Hi']);
+  });
 });

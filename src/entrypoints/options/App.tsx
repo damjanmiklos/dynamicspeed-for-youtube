@@ -4,12 +4,15 @@ import { SliderField } from '../../ui/components/SliderField';
 import { SelectField } from '../../ui/components/SelectField';
 import { SupportLink } from '../../ui/components/SupportLink';
 import { Toggle } from '../../ui/components/Toggle';
+import { InfoTip } from '../../ui/components/InfoTip';
+import { SETTINGS_HELP, type SettingHelp } from '../../ui/settings-help';
 import { useSettings } from '../../ui/hooks/useSettings';
 import { resetSettings } from '../../lib/settings/storage';
 import { clearTranscriptCache } from '../../lib/youtube/cache';
 import { resolveDynamics } from '../../lib/pacing/feel';
 import { LIMITS } from '../../lib/settings/limits';
 import { CAPTION_LANGUAGES } from '../../lib/settings/caption-languages';
+import type { DynamicSpeedSettings } from '../../lib/settings/schema';
 
 const NAV = [
   { id: 'general', label: 'General' },
@@ -27,16 +30,21 @@ type NavId = (typeof NAV)[number]['id'];
 function Row({
   title,
   hint,
+  help,
   children,
 }: {
   title: string;
   hint: string;
+  help: SettingHelp;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-3 border-b border-ds-border py-5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
       <div className="max-w-xl">
-        <div className="text-sm font-medium">{title}</div>
+        <div className="flex items-center">
+          <div className="text-sm font-medium">{title}</div>
+          <InfoTip help={help} />
+        </div>
         <div className="text-sm text-ds-muted">{hint}</div>
       </div>
       <div className="sm:w-72">{children}</div>
@@ -109,7 +117,7 @@ export function OptionsApp() {
                 DynamicSpeed reads YouTube captions on your device and sets playback speed so
                 speech lands near your target words-per-minute.
               </p>
-              <Row title="Enable" hint="Master switch for automatic speed control.">
+              <Row title="Enable" hint="Master switch for automatic speed control." help={SETTINGS_HELP.enabled}>
                 <div className="flex justify-end">
                   <Toggle
                     checked={settings.enabled}
@@ -120,6 +128,7 @@ export function OptionsApp() {
               <Row
                 title="Target WPM"
                 hint="How fast you want speech to feel. Typical conversation is about 150–180."
+                help={SETTINGS_HELP.targetWpm}
               >
                 <SliderField
                   label=""
@@ -131,7 +140,7 @@ export function OptionsApp() {
                   onChange={(targetWpm) => void update({ targetWpm })}
                 />
               </Row>
-              <Row title="Minimum speed" hint="Never go slower than this, even for very fast talkers.">
+              <Row title="Minimum speed" hint="Never go slower than this, even for very fast talkers." help={SETTINGS_HELP.minSpeed}>
                 <SliderField
                   label=""
                   min={LIMITS.minSpeed.min}
@@ -143,7 +152,7 @@ export function OptionsApp() {
                   onChange={(minSpeed) => void update({ minSpeed })}
                 />
               </Row>
-              <Row title="Maximum speed" hint="Cap for slow speech and optional b-roll skipping.">
+              <Row title="Maximum speed" hint="Cap for slow speech and optional b-roll skipping." help={SETTINGS_HELP.maxSpeed}>
                 <SliderField
                   label=""
                   min={Math.max(LIMITS.maxSpeed.min, Math.min(4.9, settings.minSpeed + 0.05))}
@@ -158,6 +167,7 @@ export function OptionsApp() {
               <Row
                 title="Default speed"
                 hint="Used before captions are ready, and whenever a transcript cannot be found."
+                help={SETTINGS_HELP.fallbackSpeed}
               >
                 <SliderField
                   label=""
@@ -172,7 +182,10 @@ export function OptionsApp() {
               </Row>
               <div className="grid items-center gap-6 py-6 md:grid-cols-[1fr_auto]">
                 <div>
-                  <div className="text-sm font-medium">Responsiveness</div>
+                  <div className="flex items-center">
+                    <div className="text-sm font-medium">Responsiveness</div>
+                    <InfoTip help={SETTINGS_HELP.responsiveness} />
+                  </div>
                   <div className="max-w-xl text-sm text-ds-muted">
                     One control for how quickly playback may change. Low is molasses-smooth.
                     High reacts to incoming speech sooner. Unlocking custom engine sliders
@@ -185,14 +198,18 @@ export function OptionsApp() {
                   onChange={(responsiveness) => void update({ responsiveness })}
                 />
               </div>
-              <Row title="Caption language" hint="Preferred caption track when several exist.">
+              <Row title="Caption language" hint="Preferred caption track when several exist." help={SETTINGS_HELP.captionLanguage}>
                 <SelectField
                   value={settings.captionLanguage}
                   options={CAPTION_LANGUAGES}
                   onChange={(captionLanguage) => void update({ captionLanguage })}
                 />
               </Row>
-              <div className="mt-6 flex flex-wrap gap-3">
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <span className="mr-1 inline-flex items-center text-sm font-medium">
+                  Backup
+                  <InfoTip help={SETTINGS_HELP.backup} />
+                </span>
                 <button
                   className="rounded-lg border border-ds-border px-4 py-2 text-sm"
                   onClick={() => void resetSettings()}
@@ -231,8 +248,12 @@ export function OptionsApp() {
                         return;
                       }
                       try {
-                        const parsed = JSON.parse(await file.text());
-                        await update(parsed);
+                        const parsed: unknown = JSON.parse(await file.text());
+                        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                          setImportError('Could not import that file.');
+                          return;
+                        }
+                        await update(parsed as Partial<DynamicSpeedSettings>);
                         setImportError(null);
                       } catch {
                         setImportError('Could not import that file.');
@@ -255,6 +276,7 @@ export function OptionsApp() {
               <Row
                 title="Syllable-weighted WPM"
                 hint="Count syllables instead of raw words so dense speech is not treated as slow."
+                help={SETTINGS_HELP.syllableWeighting}
               >
                 <div className="flex justify-end">
                   <Toggle
@@ -266,6 +288,7 @@ export function OptionsApp() {
               <Row
                 title="Jargon compensation"
                 hint="Extra weight on hard words (not in the Dale-Chall easy list, 3+ syllables). 1.00 is off. 1.15 means those words count 15% more."
+                help={SETTINGS_HELP.jargonCompensation}
               >
                 <SliderField
                   label=""
@@ -280,6 +303,7 @@ export function OptionsApp() {
               <Row
                 title="Unlock custom dynamics"
                 hint="Replace the feel knob with explicit Gaussian, median, and slew values."
+                help={SETTINGS_HELP.customDynamics}
               >
                 <div className="flex justify-end">
                   <Toggle
@@ -293,6 +317,7 @@ export function OptionsApp() {
               <Row
                 title="Gaussian window (σ)"
                 hint={`Seconds of zero-phase smoothing. Current feel pack: ${dynamics.gaussianSigma.toFixed(1)}s.`}
+                help={SETTINGS_HELP.gaussianSigma}
               >
                 <SliderField
                   label=""
@@ -308,6 +333,7 @@ export function OptionsApp() {
               <Row
                 title="Median window"
                 hint={`Strips caption jitter. Current feel pack: ${dynamics.medianWindowSec.toFixed(1)}s.`}
+                help={SETTINGS_HELP.medianWindow}
               >
                 <SliderField
                   label=""
@@ -323,6 +349,7 @@ export function OptionsApp() {
               <Row
                 title="Slew limit"
                 hint={`Max speed change per second during seeks and setting changes. Current feel pack: ${dynamics.slewRateLimit.toFixed(2)}×/s.`}
+                help={SETTINGS_HELP.slewLimit}
               >
                 <SliderField
                   label=""
@@ -335,7 +362,7 @@ export function OptionsApp() {
                   onChange={(slewRateLimit) => void update({ slewRateLimit })}
                 />
               </Row>
-              <Row title="Minimum caption chunk" hint="Merge tiny caption fragments below this duration.">
+              <Row title="Minimum caption chunk" hint="Merge tiny caption fragments below this duration." help={SETTINGS_HELP.minChunk}>
                 <SliderField
                   label=""
                   min={LIMITS.minChunkSec.min}
@@ -361,6 +388,7 @@ export function OptionsApp() {
               <Row
                 title="B-roll acceleration"
                 hint="Speed up long pauses and visual-only stretches instead of interpolating through them."
+                help={SETTINGS_HELP.bRoll}
               >
                 <div className="flex justify-end">
                   <Toggle
@@ -369,7 +397,7 @@ export function OptionsApp() {
                   />
                 </div>
               </Row>
-              <Row title="Long pause" hint="Gap length that counts as a pause rather than slow speech.">
+              <Row title="Long pause" hint="Gap length that counts as a pause rather than slow speech." help={SETTINGS_HELP.longPause}>
                 <SliderField
                   label=""
                   min={LIMITS.longPauseSec.min}
@@ -384,6 +412,7 @@ export function OptionsApp() {
               <Row
                 title="Treat [Music] as b-roll"
                 hint="Caption tags like [Music] or [Applause] are never counted as spoken WPM."
+                help={SETTINGS_HELP.treatMusic}
               >
                 <div className="flex justify-end">
                   <Toggle
@@ -397,7 +426,10 @@ export function OptionsApp() {
 
           {section === 'channels' && (
             <section>
-              <h1 className="mb-2 text-3xl font-semibold">Channel rules</h1>
+              <h1 className="mb-2 flex items-center text-3xl font-semibold">
+                Channel rules
+                <InfoTip help={SETTINGS_HELP.channelDisabled} />
+              </h1>
               <p className="mb-6 max-w-2xl text-ds-muted">
                 Disable a channel from the toolbar popup while watching. Overrides appear here.
               </p>
@@ -429,7 +461,10 @@ export function OptionsApp() {
                         </button>
                       </div>
                       <div className="mt-3 flex items-center justify-between">
-                        <span className="text-sm">Disabled</span>
+                        <span className="inline-flex items-center text-sm">
+                          Disabled
+                          <InfoTip help={SETTINGS_HELP.channelDisabled} />
+                        </span>
                         <Toggle
                           checked={Boolean(override.disabled)}
                           onChange={(disabled) =>
@@ -448,7 +483,10 @@ export function OptionsApp() {
               )}
               {settings.disabledVideoIds.length > 0 ? (
                 <div className="mt-6">
-                  <h2 className="mb-2 text-lg font-medium">Disabled videos</h2>
+                  <h2 className="mb-2 flex items-center text-lg font-medium">
+                    Disabled videos
+                    <InfoTip help={SETTINGS_HELP.disabledVideos} />
+                  </h2>
                   <ul className="space-y-2 text-sm">
                     {settings.disabledVideoIds.map((id) => (
                       <li key={id} className="flex justify-between rounded-lg bg-ds-surface px-3 py-2">
@@ -476,7 +514,7 @@ export function OptionsApp() {
           {section === 'behavior' && (
             <section>
               <h1 className="mb-2 text-3xl font-semibold">Behavior</h1>
-              <Row title="Ignore ads" hint="Do not drive playback rate while a YouTube ad is showing.">
+              <Row title="Ignore ads" hint="Do not drive playback rate while a YouTube ad is showing." help={SETTINGS_HELP.ignoreAds}>
                 <div className="flex justify-end">
                   <Toggle
                     checked={settings.ignoreAds}
@@ -484,7 +522,7 @@ export function OptionsApp() {
                   />
                 </div>
               </Row>
-              <Row title="Ignore music videos" hint="Leave official Music-category videos at YouTube’s speed.">
+              <Row title="Ignore music videos" hint="Leave official Music-category videos at YouTube’s speed." help={SETTINGS_HELP.ignoreMusic}>
                 <div className="flex justify-end">
                   <Toggle
                     checked={settings.ignoreMusicVideos}
@@ -492,7 +530,7 @@ export function OptionsApp() {
                   />
                 </div>
               </Row>
-              <Row title="Enable on Shorts" hint="Apply DynamicSpeed on YouTube Shorts.">
+              <Row title="Enable on Shorts" hint="Apply DynamicSpeed on YouTube Shorts." help={SETTINGS_HELP.enableShorts}>
                 <div className="flex justify-end">
                   <Toggle
                     checked={settings.enableOnShorts}
@@ -503,6 +541,7 @@ export function OptionsApp() {
               <Row
                 title="Prefer manual captions"
                 hint="Use creator-uploaded captions when they exist. Auto-captions often have better word timing."
+                help={SETTINGS_HELP.preferManual}
               >
                 <div className="flex justify-end">
                   <Toggle
@@ -514,6 +553,7 @@ export function OptionsApp() {
               <Row
                 title="Manual override timeout"
                 hint="If you change speed in YouTube’s menu, wait this long before taking over again."
+                help={SETTINGS_HELP.manualOverride}
               >
                 <SliderField
                   label=""
@@ -527,7 +567,7 @@ export function OptionsApp() {
                   }
                 />
               </Row>
-              <Row title="Restore 1× when disabled" hint="Reset playback speed when DynamicSpeed is turned off.">
+              <Row title="Restore 1× when disabled" hint="Reset playback speed when DynamicSpeed is turned off." help={SETTINGS_HELP.restore1x}>
                 <div className="flex justify-end">
                   <Toggle
                     checked={settings.restore1xWhenDisabled}
@@ -543,7 +583,7 @@ export function OptionsApp() {
           {section === 'display' && (
             <section>
               <h1 className="mb-2 text-3xl font-semibold">Display</h1>
-              <Row title="Player chip" hint="Show the current speed to the left of YouTube’s settings gear.">
+              <Row title="Player chip" hint="Show the current speed to the left of YouTube’s settings gear." help={SETTINGS_HELP.playerChip}>
                 <div className="flex justify-end">
                   <Toggle
                     checked={settings.showPlayerChip}
@@ -551,7 +591,7 @@ export function OptionsApp() {
                   />
                 </div>
               </Row>
-              <Row title="Chip decimals" hint="1.5× vs 1.47×.">
+              <Row title="Chip decimals" hint="1.5× vs 1.47×." help={SETTINGS_HELP.chipDecimals}>
                 <SliderField
                   label=""
                   min={LIMITS.chipDecimalPlaces.min}
@@ -563,7 +603,7 @@ export function OptionsApp() {
                   }
                 />
               </Row>
-              <Row title="WPM in tooltip" hint="Show estimated spoken WPM when hovering the chip.">
+              <Row title="WPM in tooltip" hint="Show estimated spoken WPM when hovering the chip." help={SETTINGS_HELP.wpmTooltip}>
                 <div className="flex justify-end">
                   <Toggle
                     checked={settings.showWpmInTooltip}
@@ -576,23 +616,38 @@ export function OptionsApp() {
 
           {section === 'shortcuts' && (
             <section>
-              <h1 className="mb-2 text-3xl font-semibold">Shortcuts</h1>
+              <h1 className="mb-2 flex items-center text-3xl font-semibold">
+                Shortcuts
+                <InfoTip help={SETTINGS_HELP.shortcuts} />
+              </h1>
               <p className="mb-6 text-ds-muted">
                 Chrome and Firefox let you change these in the browser’s extension shortcut
                 page. Defaults:
               </p>
               <ul className="space-y-3 text-sm">
-                <li className="rounded-xl bg-ds-surface px-4 py-3">
-                  <span className="font-mono text-ds-accent">Alt+Shift+D</span> — toggle
+                <li className="flex items-center rounded-xl bg-ds-surface px-4 py-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="font-mono text-ds-accent">Alt+Shift+D</span> — toggle
+                  </span>
+                  <InfoTip help={SETTINGS_HELP.toggleShortcut} align="end" />
                 </li>
-                <li className="rounded-xl bg-ds-surface px-4 py-3">
-                  <span className="font-mono text-ds-accent">Alt+Shift+W</span> — target WPM +10
+                <li className="flex items-center rounded-xl bg-ds-surface px-4 py-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="font-mono text-ds-accent">Alt+Shift+W</span> — target WPM +10
+                  </span>
+                  <InfoTip help={SETTINGS_HELP.wpmUpShortcut} align="end" />
                 </li>
-                <li className="rounded-xl bg-ds-surface px-4 py-3">
-                  <span className="font-mono text-ds-accent">Alt+Shift+S</span> — target WPM −10
+                <li className="flex items-center rounded-xl bg-ds-surface px-4 py-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="font-mono text-ds-accent">Alt+Shift+S</span> — target WPM −10
+                  </span>
+                  <InfoTip help={SETTINGS_HELP.wpmDownShortcut} align="end" />
                 </li>
-                <li className="rounded-xl bg-ds-surface px-4 py-3">
-                  Force 1× and toggle b-roll can be bound in the browser shortcut settings.
+                <li className="flex items-center rounded-xl bg-ds-surface px-4 py-3">
+                  <span className="min-w-0 flex-1">
+                    Force 1× and toggle b-roll can be bound in the browser shortcut settings.
+                  </span>
+                  <InfoTip help={SETTINGS_HELP.extraShortcuts} align="end" />
                 </li>
               </ul>
             </section>
@@ -606,12 +661,15 @@ export function OptionsApp() {
                 already does, parsed locally, and cached as compact word timings on this
                 device only. There is no account, no analytics, and no remote API.
               </p>
-              <button
-                className="mt-6 rounded-lg border border-ds-border px-4 py-2 text-sm"
-                onClick={() => void clearTranscriptCache()}
-              >
-                Clear caption cache
-              </button>
+              <div className="mt-6 flex items-center">
+                <button
+                  className="rounded-lg border border-ds-border px-4 py-2 text-sm"
+                  onClick={() => void clearTranscriptCache()}
+                >
+                  Clear caption cache
+                </button>
+                <InfoTip help={SETTINGS_HELP.captionCache} />
+              </div>
               <div className="mt-8">
                 <SupportLink />
               </div>

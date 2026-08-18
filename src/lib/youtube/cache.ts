@@ -91,7 +91,15 @@ export async function loadTranscriptCache(): Promise<TranscriptCacheStore> {
   if (!value || !Array.isArray(value.entries)) {
     return emptyCache();
   }
-  return evictCache(value);
+  const entries = value.entries.filter(
+    (entry) =>
+      entry &&
+      typeof entry === 'object' &&
+      typeof entry.key === 'string' &&
+      typeof entry.videoId === 'string' &&
+      Array.isArray(entry.tokens),
+  );
+  return evictCache({ entries });
 }
 
 export async function saveTranscriptCache(

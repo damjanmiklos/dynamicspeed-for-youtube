@@ -12,12 +12,15 @@ import {
   speedCalculationChanged,
 } from '../../src/lib/settings/diff';
 import { isBridgeMessage, isYouTubeOrigin } from '../../src/lib/bridge/protocol';
+import { isRuntimeMessage } from '../../src/lib/messaging/protocol';
 import {
   forceJson3Url,
   selectCaptionTrack,
+  timedTextBelongsToVideo,
   toSafeTimedTextUrl,
   videoIdFromTimedTextUrl,
 } from '../../src/lib/transcript/select-track';
+import { fromCompactTokens } from '../../src/lib/transcript/compact';
 import { parseVideoId, isYouTubeTabUrl } from '../../src/lib/youtube/video-id';
 
 describe('transcript LRU cache', () => {
@@ -66,6 +69,18 @@ describe('transcript LRU cache', () => {
   });
 });
 
+describe('compact tokens', () => {
+  it('drops malformed cached words', () => {
+    const tokens = fromCompactTokens([
+      { t0: 0, t1: 1, w: 'ok', s: 1 },
+      { t0: Number.NaN, t1: 1, w: 'bad', s: 1 },
+      { t0: 2, t1: 1, w: 'backwards', s: 1 },
+      { t0: 3, t1: 4, w: '', s: 1 },
+    ] as never);
+    expect(tokens).toEqual([{ t0: 0, t1: 1, text: 'ok', syllables: 1, jargon: false, meta: false }]);
+  });
+});
+
 describe('settings schema', () => {
   it('fills defaults', () => {
     const settings = parseSettings({});
@@ -83,6 +98,14 @@ describe('settings schema', () => {
     const settings = parseSettings({ targetWpm: 200, extra: true });
     expect(settings.targetWpm).toBe(200);
     expect('extra' in settings).toBe(false);
+  });
+
+  it('does not copy prototype-polluting keys', () => {
+    const polluted = JSON.parse('{"targetWpm":180,"__proto__":{"enabled":false}}');
+    const settings = parseSettings(polluted);
+    expect(settings.targetWpm).toBe(180);
+    expect(settings.enabled).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(settings, '__proto__')).toBe(false);
   });
 
   it('fails when min equals max', () => {
@@ -124,14 +147,24 @@ describe('bridge guards', () => {
         payload: {},
       }),
     ).toBe(true);
+    expect(isBridgeMessage({ source: 'evil', type: 'DS_EVENT', videoId: 'x', payload: {} })).toBe(
+      false,
+    );
     expect(
       isBridgeMessage({
-        source: 'evil',
+        source: 'dynamicspeed-player-bridge',
         type: 'DS_EVENT',
-        videoId: 'x',
         payload: {},
       }),
     ).toBe(false);
+  });
+
+  it('rejects runtime messages that only copy the source field', () => {
+    expect(isRuntimeMessage({ source: 'dynamicspeed-runtime', type: 'GET_PAGE_STATE' })).toBe(
+      true,
+    );
+    expect(isRuntimeMessage({ source: 'dynamicspeed-runtime', type: 'EXPLOIT' })).toBe(false);
+    expect(isRuntimeMessage({ source: 'dynamicspeed-runtime' })).toBe(false);
   });
 
   it('accepts YouTube origins', () => {
@@ -167,6 +200,24 @@ describe('caption URL + track pick', () => {
         'https://www.youtube.com/api/timedtext?v=zvCgC1yA7_w&lang=en',
       ),
     ).toBe('zvCgC1yA7_w');
+    expect(
+      timedTextBelongsToVideo(
+        'https://www.youtube.com/api/timedtext?lang=en',
+        'zvCgC1yA7_w',
+      ),
+    ).toBe(false);
+    expect(
+      timedTextBelongsToVideo(
+        'https://www.youtube.com/api/timedtext?v=zvCgC1yA7_w',
+        'zvCgC1yA7_w',
+      ),
+    ).toBe(true);
+    expect(
+      timedTextBelongsToVideo(
+        'https://www.youtube.com/api/timedtext?v=aaaaaaaaaaa',
+        'zvCgC1yA7_w',
+      ),
+    ).toBe(false);
   });
 
   it('prefers matching manual tracks', () => {
@@ -193,6 +244,8 @@ describe('video id parser', () => {
     expect(parseVideoId('https://www.youtube.com/embed/abcdefghijk')).toBe(
       'abcdefghijk',
     );
+    expect(parseVideoId('https://www.youtube.com/watch?v=short')).toBe(null);
+    expect(parseVideoId('https://www.youtube.com/watch?v=<script>alert')).toBe(null);
   });
 
   it('rejects URLs that only mention youtube.com as a substring', () => {

@@ -16,6 +16,10 @@ const CHIP_STYLE = `
 .ytp-button.${CHIP_CLASS}[data-ds-inactive="true"] {
   opacity: 0.55;
 }
+.ytp-button.${CHIP_CLASS}[data-ds-conflict="true"] {
+  color: #ff4d4d !important;
+  font-weight: 800 !important;
+}
 `;
 
 function ensureStyle(): void {
@@ -48,6 +52,7 @@ export function upsertPlayerChip(options: {
   label: string;
   title: string;
   inactive?: boolean;
+  conflict?: boolean;
   onClick?: () => void;
 }): HTMLButtonElement | null {
   ensureStyle();
@@ -76,6 +81,12 @@ export function upsertPlayerChip(options: {
   chip.textContent = options.label;
   chip.title = options.title;
   chip.dataset.dsInactive = options.inactive ? 'true' : 'false';
+  chip.dataset.dsConflict = options.conflict ? 'true' : 'false';
+  if (options.conflict) {
+    chip.setAttribute('aria-label', 'DynamicSpeed playback rate. Another extension is forcing a fixed speed.');
+  } else {
+    chip.setAttribute('aria-label', 'DynamicSpeed playback rate');
+  }
   if (options.onClick) {
     chip.onclick = options.onClick;
   }

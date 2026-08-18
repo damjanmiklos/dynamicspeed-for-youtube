@@ -23,6 +23,7 @@ import {
   upsertPlayerChip,
 } from './chip';
 import { applyPreservesPitch, isExternalRateChange, setPlaybackRate } from './playback';
+import { createSpeedConflictTracker, stolenPlaybackRate } from './speed-conflict';
 import { isShortsPath, parseVideoId } from './video-id';
 import type { PageState } from '../messaging/protocol';
 
@@ -41,6 +42,8 @@ export function createPlaybackController(hooks: ControllerHooks) {
   let lastVideoTime = 0;
   let lastFrame = performance.now();
   let weSetRateUntil = 0;
+  let lastOwnedRate: number | null = null;
+  const speedConflict = createSpeedConflictTracker();
   let video: HTMLVideoElement | null = null;
   let destroyed = false;
   let transcriptStatus = 'idle';
@@ -97,6 +100,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
     }
     video = next;
     introActive = false;
+    lastOwnedRate = null;
     if (video) {
       applyPreservesPitch(video);
       applied = video.playbackRate || 1;
@@ -160,17 +164,20 @@ export function createPlaybackController(hooks: ControllerHooks) {
     attachVideo(nextVideo);
 
     if (!current || !video) {
+      dropRateOwnership();
       updateChip(null, current);
       return;
     }
 
     if (current.ignoreAds && isAdShowing()) {
+      dropRateOwnership();
       updateChip(video.playbackRate, current, 'ad');
       return;
     }
 
     if (!current.automationAllowed || forceHold != null) {
       cancelIntro();
+      dropRateOwnership();
       if (current.restore1xWhenDisabled && forceHold == null) {
         commitRate(1);
       } else if (forceHold != null) {
@@ -182,6 +189,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
 
     if (now < overrideUntil) {
       cancelIntro();
+      dropRateOwnership();
       updateChip(video.playbackRate, current, 'manual');
       return;
     }
@@ -194,7 +202,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
         Math.abs(desired - applied) / FALLBACK_SLEW_SEC,
       );
       applied = slewStep(applied, desired, dt, limit);
-      commitRate(applied);
+      ownRate(applied);
       updateChip(applied, current);
       return;
     }
@@ -226,8 +234,28 @@ export function createPlaybackController(hooks: ControllerHooks) {
       applied = desired;
     }
 
-    commitRate(applied);
+    ownRate(applied);
     updateChip(applied, current);
+  }
+
+  function dropRateOwnership(): void {
+    lastOwnedRate = null;
+  }
+
+  function ownRate(rate: number): void {
+    if (!video) {
+      return;
+    }
+    const now = performance.now();
+    const before = video.playbackRate;
+    commitRate(rate);
+    const stolen = stolenPlaybackRate(lastOwnedRate, before, rate, video.playbackRate);
+    lastOwnedRate = rate;
+    if (stolen != null) {
+      speedConflict.noteMismatch(now, stolen);
+    } else {
+      speedConflict.noteMatch(now);
+    }
   }
 
   function commitRate(rate: number): void {
@@ -248,6 +276,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
       return;
     }
     const spoken = curve && video ? wpmAt(curve, video.currentTime) : null;
+    const conflict = speedConflict.isActive();
     const inactive =
       !current.automationAllowed ||
       Boolean(mode) ||
@@ -258,11 +287,15 @@ export function createPlaybackController(hooks: ControllerHooks) {
       spoken ? `Speech ~${Math.round(spoken)} WPM` : `Captions: ${transcriptStatus}`,
       current.blockReason ? `Paused: ${current.blockReason}` : '',
       mode ? `Mode: ${mode}` : '',
+      conflict
+        ? 'Another extension is forcing a fixed speed. Disable that speed control.'
+        : '',
     ].filter(Boolean);
     upsertPlayerChip({
       label: formatRate(rate, current.chipDecimalPlaces),
       title: current.showWpmInTooltip ? titleParts.join('\n') : 'DynamicSpeed',
       inactive,
+      conflict,
       onClick: () => onChipClick?.(),
     });
   }
@@ -350,6 +383,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
         hasTranscript: tokens.length > 0,
         transcriptStatus,
         automationActive: Boolean(current?.automationAllowed && curve && performance.now() >= overrideUntil && forceHold == null),
+        speedConflict: speedConflict.isActive(),
         blockReason: current?.blockReason ?? null,
         isShorts: isShortsPath(location.href),
         isLive: meta.isLive,

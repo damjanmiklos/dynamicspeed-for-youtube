@@ -1,14 +1,11 @@
 import { loadSettings, migrateSettings, saveSettings } from '../lib/settings/storage';
 import { SETTINGS_STORAGE_KEY } from '../lib/settings/schema';
+import { YOUTUBE_MATCHES } from '../lib/youtube/video-id';
 import { RUNTIME_SOURCE, type RuntimeMessage } from '../lib/messaging/protocol';
 
 async function notifyYouTubeTabs(): Promise<void> {
   const tabs = await browser.tabs.query({
-    url: [
-      '*://*.youtube.com/*',
-      '*://youtube.com/*',
-      '*://*.youtube-nocookie.com/*',
-    ],
+    url: [...YOUTUBE_MATCHES],
   });
   const message: RuntimeMessage = {
     source: RUNTIME_SOURCE,

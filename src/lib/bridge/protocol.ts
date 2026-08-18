@@ -53,17 +53,37 @@ export function isYouTubeOrigin(origin: string): boolean {
   return YOUTUBE_ORIGINS.has(origin);
 }
 
+const BRIDGE_TYPES = new Set(['DS_REQUEST', 'DS_RESPONSE', 'DS_EVENT']);
+const BRIDGE_NAMES = new Set([
+  'GET_PLAYER_SNAPSHOT',
+  'ACQUIRE_FALLBACK_TRANSCRIPT',
+  'RAW_TRACKS_RESOLVED',
+  'TIMEDTEXT_CAPTURED',
+  'PLAYER_STATE_CHANGE',
+  'VIDEO_ID_CHANGED',
+]);
+
 export function isBridgeMessage(data: unknown): data is BridgeMessage {
   if (!data || typeof data !== 'object') {
     return false;
   }
-  const message = data as BridgeMessage;
-  return (
-    message.source === BRIDGE_SOURCE &&
-    (message.type === 'DS_REQUEST' ||
-      message.type === 'DS_RESPONSE' ||
-      message.type === 'DS_EVENT')
-  );
+  const message = data as Record<string, unknown>;
+  if (message.source !== BRIDGE_SOURCE) {
+    return false;
+  }
+  if (typeof message.type !== 'string' || !BRIDGE_TYPES.has(message.type)) {
+    return false;
+  }
+  if (typeof message.videoId !== 'string' || message.videoId.length > 32) {
+    return false;
+  }
+  if (message.name != null && (typeof message.name !== 'string' || !BRIDGE_NAMES.has(message.name))) {
+    return false;
+  }
+  if (message.requestId != null && (typeof message.requestId !== 'string' || message.requestId.length > 80)) {
+    return false;
+  }
+  return true;
 }
 
 export function isTrustedBridgeEvent(event: MessageEvent): boolean {

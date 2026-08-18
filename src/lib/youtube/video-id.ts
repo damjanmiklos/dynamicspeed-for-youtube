@@ -1,13 +1,20 @@
+const VIDEO_ID_PATTERN = /^[\w-]{11}$/;
+
+export function asVideoId(value: string | null | undefined): string | null {
+  return value && VIDEO_ID_PATTERN.test(value) ? value : null;
+}
+
 export function parseVideoId(href: string): string | null {
   try {
     const url = new URL(href);
-    if (url.searchParams.get('v')) {
-      return url.searchParams.get('v');
+    const fromQuery = asVideoId(url.searchParams.get('v'));
+    if (fromQuery) {
+      return fromQuery;
     }
     const parts = url.pathname.split('/').filter(Boolean);
     const kind = parts[0];
     if (kind === 'shorts' || kind === 'embed' || kind === 'live' || kind === 'v') {
-      return parts[1] ?? null;
+      return asVideoId(parts[1]);
     }
     return null;
   } catch {
@@ -53,7 +60,10 @@ export function isYouTubeTabUrl(raw: string | undefined | null): boolean {
 }
 
 export const YOUTUBE_MATCHES = [
-  '*://*.youtube.com/*',
+  '*://www.youtube.com/*',
   '*://youtube.com/*',
-  '*://*.youtube-nocookie.com/*',
+  '*://m.youtube.com/*',
+  '*://music.youtube.com/*',
+  '*://www.youtube-nocookie.com/*',
+  '*://youtube-nocookie.com/*',
 ] as const;

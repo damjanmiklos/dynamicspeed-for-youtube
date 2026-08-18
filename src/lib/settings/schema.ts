@@ -42,7 +42,14 @@ export const DynamicSpeedSettingsSchema = z
       .default({})
       .refine((value) => Object.keys(value).length <= 100, {
         message: 'Too many channel overrides',
-      }),
+      })
+      .refine(
+        (value) =>
+          Object.keys(value).every(
+            (key) => key !== '__proto__' && key !== 'constructor' && key !== 'prototype',
+          ),
+        { message: 'Invalid channel override key' },
+      ),
     disabledVideoIds: z.array(z.string().max(32)).max(200).default([]),
     captionLanguage: z.string().min(2).max(16).default('en'),
     preferManualCaptions: z.boolean().default(true),

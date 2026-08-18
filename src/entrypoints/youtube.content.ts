@@ -97,6 +97,9 @@ export default defineContentScript({
 
     const unlisten = listenToMainEvents((name) => {
       if (name === 'VIDEO_ID_CHANGED') {
+        if (!parseVideoId(location.href)) {
+          return;
+        }
         snapshot = null;
         void loadForCurrentVideo();
         return;
@@ -111,9 +114,12 @@ export default defineContentScript({
 
     const onMessage = (
       message: unknown,
-      _sender: unknown,
+      sender: { id?: string },
       sendResponse: (response: unknown) => void,
     ) => {
+      if (sender.id && sender.id !== browser.runtime.id) {
+        return;
+      }
       if (!isRuntimeMessage(message)) {
         return;
       }

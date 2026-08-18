@@ -11,6 +11,7 @@ export type PageState = {
   hasTranscript: boolean;
   transcriptStatus: string;
   automationActive: boolean;
+  speedConflict: boolean;
   blockReason: string | null;
   isShorts: boolean;
   isLive: boolean;
@@ -27,11 +28,27 @@ export type RuntimeMessage =
   | { source: typeof RUNTIME_SOURCE; type: 'SETTINGS_CHANGED' };
 
 export function isRuntimeMessage(data: unknown): data is RuntimeMessage {
-  return Boolean(
-    data &&
-      typeof data === 'object' &&
-      (data as RuntimeMessage).source === RUNTIME_SOURCE,
-  );
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+  const message = data as Record<string, unknown>;
+  if (message.source !== RUNTIME_SOURCE || typeof message.type !== 'string') {
+    return false;
+  }
+  switch (message.type) {
+    case 'GET_PAGE_STATE':
+    case 'TOGGLE_CHANNEL':
+    case 'TOGGLE_VIDEO':
+    case 'OPEN_OPTIONS':
+    case 'SETTINGS_CHANGED':
+      return true;
+    case 'PAGE_STATE':
+      return typeof message.state === 'object' && message.state !== null;
+    case 'COMMAND':
+      return typeof message.command === 'string' && message.command.length <= 64;
+    default:
+      return false;
+  }
 }
 
 export const EMPTY_PAGE_STATE: PageState = {
@@ -45,6 +62,7 @@ export const EMPTY_PAGE_STATE: PageState = {
   hasTranscript: false,
   transcriptStatus: 'unavailable',
   automationActive: false,
+  speedConflict: false,
   blockReason: null,
   isShorts: false,
   isLive: false,

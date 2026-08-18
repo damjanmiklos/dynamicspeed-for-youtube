@@ -65,7 +65,7 @@ export function timedTextBelongsToVideo(raw: string, videoId: string): boolean {
     return false;
   }
   const video = new URL(safe).searchParams.get('v');
-  return !video || video === videoId;
+  return video === videoId;
 }
 
 export function selectCaptionTrack(

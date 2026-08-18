@@ -1,6 +1,7 @@
 import { emitBridgeEvent, listenToIsolatedRequests } from '../lib/bridge/main';
 import type { CaptionTrackPayload, PlayerSnapshot } from '../lib/bridge/protocol';
 import { toSafeTimedTextUrl, videoIdFromTimedTextUrl } from '../lib/transcript/select-track';
+import { MAX_CAPTION_BYTES } from '../lib/transcript/limits';
 import { parseVideoId, isShortsPath, YOUTUBE_MATCHES } from '../lib/youtube/video-id';
 
 type PlayerResponse = {
@@ -106,7 +107,7 @@ function scrapeDomTranscript(): unknown | null {
     ...document.querySelectorAll(
       'ytd-transcript-segment-renderer, ytd-transcript-body-renderer ytd-transcript-segment-renderer',
     ),
-  ];
+  ].slice(0, 8_000);
   if (rows.length === 0) {
     return null;
   }
@@ -218,7 +219,14 @@ async function fetchAllowlistedTimedText(baseUrl: string): Promise<unknown | nul
   if (!timed.ok) {
     return null;
   }
+  const declared = Number(timed.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_CAPTION_BYTES) {
+    return null;
+  }
   const text = await timed.text();
+  if (text.length > MAX_CAPTION_BYTES) {
+    return null;
+  }
   const trimmed = text.trim();
   if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
     return null;
@@ -239,6 +247,9 @@ function rememberTimedTextBody(url: string, body: unknown): void {
   let data: object | null = null;
   if (typeof body === 'string') {
     const trimmed = body.trim();
+    if (trimmed.length > MAX_CAPTION_BYTES) {
+      return;
+    }
     if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
       return;
     }
@@ -264,7 +275,15 @@ function rememberTimedTextBody(url: string, body: unknown): void {
   }
 }
 
+const FETCH_HOOK_FLAG = '__dsTimedTextFetchHooked';
+
 function installTimedtextObserver(): void {
+  const hooked = window as Window & { [FETCH_HOOK_FLAG]?: boolean };
+  if (hooked[FETCH_HOOK_FLAG]) {
+    return;
+  }
+  hooked[FETCH_HOOK_FLAG] = true;
+
   const originalFetch = window.fetch.bind(window);
   window.fetch = async (...args: Parameters<typeof fetch>) => {
     const response = await originalFetch(...args);
@@ -280,7 +299,11 @@ function installTimedtextObserver(): void {
               : '';
       if (toSafeTimedTextUrl(url)) {
         const clone = response.clone();
-        void clone.text().then((text) => rememberTimedTextBody(url, text));
+        void clone.text().then((text) => {
+          if (text.length <= MAX_CAPTION_BYTES) {
+            rememberTimedTextBody(url, text);
+          }
+        });
       }
     } catch {
       // ignore observer errors
@@ -389,7 +412,9 @@ async function waitForCapture(videoId: string, timeoutMs: number): Promise<unkno
   return captureMatchesVideo(videoId);
 }
 
-async function acquireFallbackTranscript(): Promise<unknown> {
+let fallbackInFlight: Promise<unknown> | null = null;
+
+async function acquireFallbackTranscriptNow(): Promise<unknown> {
   const videoId = parseVideoId(location.href) ?? '';
   const captured = await waitForCapture(videoId, 8000);
   if (captured) {
@@ -410,6 +435,16 @@ async function acquireFallbackTranscript(): Promise<unknown> {
     }
   }
   return scrapeDomTranscript();
+}
+
+async function acquireFallbackTranscript(): Promise<unknown> {
+  if (fallbackInFlight) {
+    return fallbackInFlight;
+  }
+  fallbackInFlight = acquireFallbackTranscriptNow().finally(() => {
+    fallbackInFlight = null;
+  });
+  return fallbackInFlight;
 }
 
 export default defineContentScript({

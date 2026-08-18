@@ -10,6 +10,7 @@ import type { CaptionTrack, WordToken } from '../transcript/types';
 import { recallTokens, rememberTokens } from './cache';
 import { parseVideoId } from './video-id';
 import type { DynamicSpeedSettings } from '../settings/schema';
+import { MAX_CAPTION_BYTES, MAX_CAPTION_TRACKS, MAX_TOKENS } from '../transcript/limits';
 
 export type AcquireResult = {
   tokens: WordToken[];
@@ -20,7 +21,7 @@ export type AcquireResult = {
 
 function asTracks(snapshot: PlayerSnapshot, videoId: string): CaptionTrack[] {
   const allowed: CaptionTrack[] = [];
-  for (const track of snapshot.tracks) {
+  for (const track of snapshot.tracks.slice(0, MAX_CAPTION_TRACKS)) {
     const baseUrl = toSafeTimedTextUrl(track.baseUrl);
     if (!baseUrl || !timedTextBelongsToVideo(baseUrl, videoId)) {
       continue;
@@ -54,7 +55,14 @@ async function fetchTimedTextJson(baseUrl: string): Promise<unknown | null> {
   if (!response.ok) {
     return null;
   }
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_CAPTION_BYTES) {
+    return null;
+  }
   const text = await response.text();
+  if (text.length > MAX_CAPTION_BYTES) {
+    return null;
+  }
   const trimmed = text.trim();
   if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
     return null;
@@ -101,10 +109,19 @@ async function readSnapshot(pageVideoId: string): Promise<PlayerSnapshot> {
 }
 
 function isPlayerSnapshot(value: unknown): value is PlayerSnapshot {
-  return Boolean(
-    value &&
-      typeof value === 'object' &&
-      Array.isArray((value as PlayerSnapshot).tracks),
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const snapshot = value as PlayerSnapshot;
+  if (!Array.isArray(snapshot.tracks) || snapshot.tracks.length > MAX_CAPTION_TRACKS) {
+    return false;
+  }
+  return snapshot.tracks.every(
+    (track) =>
+      track &&
+      typeof track === 'object' &&
+      typeof track.baseUrl === 'string' &&
+      typeof track.languageCode === 'string',
   );
 }
 
@@ -129,7 +146,7 @@ export async function acquireTranscript(
       language: track.languageCode,
       trackKind: track.kind ?? 'asr',
     });
-    if (cached && cached.length > 0) {
+    if (cached && cached.length > 0 && cached.length <= MAX_TOKENS) {
       return { tokens: cached, source: 'cache', track, snapshot };
     }
 

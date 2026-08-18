@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'wxt';
+import { YOUTUBE_MATCHES } from './src/lib/youtube/video-id';
 
 const SCRATCH_IGNORED = [
   '**/scratch/**',
@@ -58,11 +59,10 @@ export default defineConfig({
     description:
       'Automatically match YouTube playback speed to your target words-per-minute.',
     permissions: ['storage'],
-    host_permissions: [
-      '*://*.youtube.com/*',
-      '*://youtube.com/*',
-      '*://*.youtube-nocookie.com/*',
-    ],
+    host_permissions: [...YOUTUBE_MATCHES],
+    content_security_policy: {
+      extension_pages: "script-src 'self'; object-src 'none'; base-uri 'self';",
+    },
     browser_specific_settings: {
       gecko: {
         id: 'dynamicspeed-for-youtube@dynamicspeed',

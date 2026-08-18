@@ -9,8 +9,8 @@ export function SupportLink({ compact = false }: { compact?: boolean }) {
       title="Buy me a coffee"
       className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full font-medium text-[#2a2118] shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] transition hover:brightness-110 ${
         compact
-          ? 'bg-[#c4a06a] px-2 py-0.5 text-[10px] leading-none'
-          : 'bg-[#c4a06a] px-3 py-1.5 text-xs'
+          ? 'bg-[#c4a06a] px-2 py-1.5 text-[10px] leading-none'
+          : 'bg-[#c4a06a] px-3 py-2.5 text-xs'
       }`}
     >
       <svg

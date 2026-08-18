@@ -24,8 +24,9 @@ describe('player chip', () => {
     const settings = document.querySelector('.ytp-settings-button');
     expect(chip).toBeTruthy();
     expect(chip?.nextElementSibling).toBe(settings);
-    const again = upsertPlayerChip({ label: '1.50×', title: 'DynamicSpeed' });
+    const again = upsertPlayerChip({ label: '1.50×', title: 'DynamicSpeed', conflict: true });
     expect(document.querySelectorAll('.dynamicspeed-chip')).toHaveLength(1);
     expect(again).toBe(chip);
+    expect(again?.dataset.dsConflict).toBe('true');
   });
 });

@@ -2,6 +2,7 @@ import { browser } from 'wxt/browser';
 import { useEffect, useState } from 'react';
 import { Knob } from '../../ui/components/Knob';
 import { SliderField } from '../../ui/components/SliderField';
+import { SpeedConflictBanner } from '../../ui/components/SpeedConflictBanner';
 import { SupportLink } from '../../ui/components/SupportLink';
 import { Toggle } from '../../ui/components/Toggle';
 import { useSettings } from '../../ui/hooks/useSettings';
@@ -77,6 +78,8 @@ export function PopupApp() {
           />
         </div>
       </header>
+
+      {page.isYouTube && page.speedConflict ? <SpeedConflictBanner /> : null}
 
       {page.isYouTube ? (
         <div className="mb-2 rounded-lg border border-ds-border bg-ds-surface px-2.5 py-1.5">

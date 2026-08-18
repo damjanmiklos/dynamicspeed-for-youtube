@@ -6,8 +6,12 @@ export function applyPreservesPitch(video: HTMLVideoElement): void {
 
 export function setPlaybackRate(video: HTMLVideoElement, rate: number): void {
   applyPreservesPitch(video);
-  if (Math.abs(video.playbackRate - rate) > 0.005) {
-    video.playbackRate = rate;
+  if (!Number.isFinite(rate)) {
+    return;
+  }
+  const clamped = Math.min(16, Math.max(0.07, rate));
+  if (Math.abs(video.playbackRate - clamped) > 0.005) {
+    video.playbackRate = clamped;
   }
 }
 

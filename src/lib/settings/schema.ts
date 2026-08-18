@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import { LIMITS } from './limits';
 
 export const ChannelOverrideSchema = z.object({
   disabled: z.boolean().optional(),
-  targetWpm: z.number().min(80).max(400).optional(),
-  maxSpeed: z.number().min(0.5).max(5).optional(),
+  targetWpm: z.number().min(LIMITS.targetWpm.min).max(LIMITS.targetWpm.max).optional(),
+  maxSpeed: z.number().min(LIMITS.maxSpeed.min).max(LIMITS.maxSpeed.max).optional(),
   name: z.string().max(200).optional(),
 });
 
@@ -11,9 +12,14 @@ export const DynamicSpeedSettingsSchema = z
   .object({
     version: z.number().default(1),
     enabled: z.boolean().default(true),
-    targetWpm: z.number().min(80).max(400).default(165),
-    minSpeed: z.number().min(0.25).max(4).default(0.75),
-    maxSpeed: z.number().min(0.5).max(5).default(3),
+    targetWpm: z.number().min(LIMITS.targetWpm.min).max(LIMITS.targetWpm.max).default(165),
+    minSpeed: z.number().min(LIMITS.minSpeed.min).max(LIMITS.minSpeed.max).default(0.75),
+    maxSpeed: z.number().min(LIMITS.maxSpeed.min).max(LIMITS.maxSpeed.max).default(3),
+    fallbackSpeed: z
+      .number()
+      .min(LIMITS.fallbackSpeed.min)
+      .max(LIMITS.fallbackSpeed.max)
+      .default(1),
 
     responsiveness: z.number().min(0).max(1).default(0.5),
     customDynamicsUnlocked: z.boolean().default(false),

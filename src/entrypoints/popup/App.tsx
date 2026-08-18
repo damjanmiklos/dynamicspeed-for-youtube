@@ -2,19 +2,22 @@ import { browser } from 'wxt/browser';
 import { useEffect, useState } from 'react';
 import { Knob } from '../../ui/components/Knob';
 import { SliderField } from '../../ui/components/SliderField';
+import { SupportLink } from '../../ui/components/SupportLink';
 import { Toggle } from '../../ui/components/Toggle';
 import { useSettings } from '../../ui/hooks/useSettings';
+import { LIMITS } from '../../lib/settings/limits';
 import {
   EMPTY_PAGE_STATE,
   RUNTIME_SOURCE,
   type PageState,
   type RuntimeMessage,
 } from '../../lib/messaging/protocol';
+import { isYouTubeTabUrl } from '../../lib/youtube/video-id';
 
 async function queryPageState(): Promise<PageState> {
   const tabs = await browser.tabs.query({ active: true, currentWindow: true });
   const tab = tabs[0];
-  if (!tab?.id || !tab.url?.includes('youtube.com')) {
+  if (!tab?.id || !isYouTubeTabUrl(tab.url)) {
     return EMPTY_PAGE_STATE;
   }
   try {
@@ -44,7 +47,7 @@ export function PopupApp() {
   }, []);
 
   if (!ready) {
-    return <div className="p-4 text-sm text-ds-muted">Loading…</div>;
+    return <div className="p-3 text-sm text-ds-muted">Loading…</div>;
   }
 
   const channelDisabled = Boolean(
@@ -55,13 +58,13 @@ export function PopupApp() {
   );
 
   return (
-    <div className="w-[360px] bg-ds-bg p-4 text-ds-text">
-      <header className="mb-4 flex items-start justify-between gap-3">
+    <div className="w-[340px] overflow-hidden bg-ds-bg px-3 py-2 text-ds-text">
+      <header className="mb-2 flex items-center justify-between gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-ds-muted">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-ds-muted">
             DynamicSpeed
           </div>
-          <h1 className="text-lg font-semibold">for YouTube</h1>
+          <h1 className="text-base font-semibold leading-tight">for YouTube</h1>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-ds-muted">
@@ -76,12 +79,12 @@ export function PopupApp() {
       </header>
 
       {page.isYouTube ? (
-        <div className="mb-4 rounded-xl border border-ds-border bg-ds-surface p-3">
-          <div className="text-xs text-ds-muted">Now playing</div>
-          <div className="truncate text-sm font-medium">
+        <div className="mb-2 rounded-lg border border-ds-border bg-ds-surface px-2.5 py-1.5">
+          <div className="text-[11px] text-ds-muted">Now playing</div>
+          <div className="truncate text-sm font-medium leading-tight">
             {page.title ?? 'YouTube'}
           </div>
-          <div className="mt-2 flex items-center justify-between text-sm">
+          <div className="mt-1 flex items-center justify-between text-sm">
             <span className="font-mono text-ds-accent">
               {page.playbackRate != null ? `${page.playbackRate.toFixed(2)}×` : '—'}
             </span>
@@ -91,53 +94,57 @@ export function PopupApp() {
           </div>
         </div>
       ) : (
-        <div className="mb-4 rounded-xl border border-ds-border bg-ds-surface p-3 text-sm text-ds-muted">
+        <div className="mb-2 rounded-lg border border-ds-border bg-ds-surface px-2.5 py-1.5 text-sm text-ds-muted">
           Open a YouTube video to use DynamicSpeed.
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-2">
         <SliderField
+          compact
           label="Target WPM"
-          hint="Spoken words you want to hear per minute"
-          min={120}
-          max={250}
-          value={Math.min(250, Math.max(120, settings.targetWpm))}
+          min={LIMITS.targetWpm.min}
+          max={LIMITS.targetWpm.max}
+          step={LIMITS.targetWpm.step}
+          value={settings.targetWpm}
           onChange={(targetWpm) => void update({ targetWpm })}
           unit=" WPM"
         />
-        <div className="flex items-center justify-between rounded-xl border border-ds-border bg-ds-surface px-3 py-3">
+        <div className="flex items-center justify-between rounded-lg border border-ds-border bg-ds-surface px-2.5 py-1.5">
           <div>
             <div className="text-sm font-medium">Feel</div>
-            <div className="text-xs text-ds-muted">
+            <div className="text-[11px] text-ds-muted">
               {settings.customDynamicsUnlocked
                 ? 'Custom engine values unlocked'
                 : 'How quickly speed may change'}
             </div>
           </div>
           <Knob
+            compact
             value={settings.responsiveness}
             disabled={settings.customDynamicsUnlocked}
             onChange={(responsiveness) => void update({ responsiveness })}
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2">
           <SliderField
+            compact
             label="Min speed"
-            min={0.25}
-            max={Math.max(0.5, settings.maxSpeed - 0.05)}
-            step={0.05}
-            decimals={2}
+            min={LIMITS.minSpeed.min}
+            max={Math.min(LIMITS.minSpeed.max, Math.max(0.5, settings.maxSpeed - 0.05))}
+            step={LIMITS.minSpeed.step}
+            decimals={LIMITS.minSpeed.decimals}
             value={settings.minSpeed}
             unit="×"
             onChange={(minSpeed) => void update({ minSpeed })}
           />
           <SliderField
+            compact
             label="Max speed"
-            min={Math.min(4.9, settings.minSpeed + 0.05)}
-            max={5}
-            step={0.05}
-            decimals={2}
+            min={Math.max(LIMITS.maxSpeed.min, Math.min(4.9, settings.minSpeed + 0.05))}
+            max={LIMITS.maxSpeed.max}
+            step={LIMITS.maxSpeed.step}
+            decimals={LIMITS.maxSpeed.decimals}
             value={settings.maxSpeed}
             unit="×"
             onChange={(maxSpeed) => void update({ maxSpeed })}
@@ -145,9 +152,9 @@ export function PopupApp() {
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className="mt-2 grid grid-cols-2 gap-1.5">
         <button
-          className="rounded-lg border border-ds-border bg-ds-surface px-3 py-2 text-left text-xs hover:bg-ds-surface-2 disabled:opacity-40"
+          className="rounded-lg border border-ds-border bg-ds-surface px-2 py-1.5 text-left text-[11px] hover:bg-ds-surface-2 disabled:opacity-40"
           disabled={!page.channelId}
           onClick={() =>
             void browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
@@ -163,7 +170,7 @@ export function PopupApp() {
           {channelDisabled ? 'Enable this channel' : 'Disable this channel'}
         </button>
         <button
-          className="rounded-lg border border-ds-border bg-ds-surface px-3 py-2 text-left text-xs hover:bg-ds-surface-2 disabled:opacity-40"
+          className="rounded-lg border border-ds-border bg-ds-surface px-2 py-1.5 text-left text-[11px] hover:bg-ds-surface-2 disabled:opacity-40"
           disabled={!page.videoId}
           onClick={() =>
             void browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
@@ -180,15 +187,16 @@ export function PopupApp() {
         </button>
       </div>
 
-      <button
-        className="mt-4 w-full rounded-lg bg-ds-accent px-3 py-2.5 text-sm font-semibold text-white hover:bg-ds-accent-2"
-        onClick={() => void browser.runtime.openOptionsPage()}
-      >
-        Open full settings
-      </button>
-      <p className="mt-3 text-[11px] text-ds-muted">
-        Alt+Shift+D toggle · Alt+Shift+W / S target WPM
-      </p>
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          className="min-w-0 flex-1 rounded-lg bg-ds-accent px-3 py-1.5 text-sm font-semibold text-white hover:bg-ds-accent-2"
+          onClick={() => void browser.runtime.openOptionsPage()}
+        >
+          Open full settings
+        </button>
+        <SupportLink compact />
+      </div>
+      <p className="mt-1.5 text-center text-[10px] text-ds-muted">Alt+Shift+D · W/S</p>
     </div>
   );
 }

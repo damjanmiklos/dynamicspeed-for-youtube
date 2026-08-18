@@ -1,5 +1,8 @@
 import { listenToMainEvents } from '../lib/bridge/isolated';
 import { loadSettings, patchSettings, watchSettings } from '../lib/settings/storage';
+import { captionSourceChanged } from '../lib/settings/diff';
+import { LIMITS } from '../lib/settings/limits';
+import type { DynamicSpeedSettings } from '../lib/settings/schema';
 import {
   EMPTY_PAGE_STATE,
   RUNTIME_SOURCE,
@@ -17,6 +20,7 @@ export default defineContentScript({
   main(ctx) {
     let snapshot: PlayerSnapshot | null = null;
     let loadGeneration = 0;
+    let appliedSettings: DynamicSpeedSettings | null = null;
     const controller = createPlaybackController({
       getChannel: () => ({
         channelId: snapshot?.channelId ?? null,
@@ -33,6 +37,7 @@ export default defineContentScript({
       if (gen !== loadGeneration) {
         return;
       }
+      appliedSettings = settings;
       controller.setSettings(settings);
       const videoId = parseVideoId(location.href);
       if (!videoId) {
@@ -68,6 +73,15 @@ export default defineContentScript({
       );
     };
 
+    const applySettings = (settings: DynamicSpeedSettings) => {
+      const previous = appliedSettings;
+      appliedSettings = settings;
+      controller.setSettings(settings);
+      if (previous && captionSourceChanged(previous, settings)) {
+        void loadForCurrentVideo();
+      }
+    };
+
     controller.setChipClickHandler(() => {
       void loadSettings().then((settings) =>
         patchSettings({ enabled: !settings.enabled }),
@@ -78,8 +92,7 @@ export default defineContentScript({
     void loadForCurrentVideo();
 
     const unwatch = watchSettings((settings) => {
-      controller.setSettings(settings);
-      controller.beginSlew();
+      applySettings(settings);
     });
 
     const unlisten = listenToMainEvents((name) => {
@@ -105,6 +118,15 @@ export default defineContentScript({
         return;
       }
       if (message.type === 'GET_PAGE_STATE') {
+        sendResponse({
+          source: RUNTIME_SOURCE,
+          type: 'PAGE_STATE',
+          state: controller.getPageState(),
+        } satisfies RuntimeMessage);
+        return true;
+      }
+      if (message.type === 'SETTINGS_CHANGED') {
+        void loadSettings().then(applySettings);
         sendResponse({
           source: RUNTIME_SOURCE,
           type: 'PAGE_STATE',
@@ -157,11 +179,11 @@ export default defineContentScript({
             await patchSettings({ enabled: !settings.enabled });
           } else if (message.command === 'wpm-up') {
             await patchSettings({
-              targetWpm: Math.min(400, settings.targetWpm + 10),
+              targetWpm: Math.min(LIMITS.targetWpm.max, settings.targetWpm + 10),
             });
           } else if (message.command === 'wpm-down') {
             await patchSettings({
-              targetWpm: Math.max(80, settings.targetWpm - 10),
+              targetWpm: Math.max(LIMITS.targetWpm.min, settings.targetWpm - 10),
             });
           } else if (message.command === 'force-1x') {
             controller.forceRate(1);

@@ -1,3 +1,6 @@
+import { lerp, smoothstep } from './feel';
+import { INTRO_SLEW_SEC } from '../settings/limits';
+
 /** Situational slew: never run this every frame on an already-smooth curve. */
 
 export function slewStep(
@@ -21,3 +24,15 @@ export function slewStep(
 }
 
 export const RATE_JUMP_EPSILON = 0.08;
+
+export function introRate(
+  from: number,
+  to: number,
+  elapsedSec: number,
+  durationSec = INTRO_SLEW_SEC,
+): number {
+  if (durationSec <= 0) {
+    return to;
+  }
+  return lerp(from, to, smoothstep(elapsedSec / durationSec));
+}

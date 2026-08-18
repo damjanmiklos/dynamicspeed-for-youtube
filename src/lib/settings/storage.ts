@@ -35,12 +35,16 @@ export function watchSettings(
 ): () => void {
   const handler = (
     changes: Record<string, { newValue?: unknown }>,
-    area: string,
+    area?: string,
   ) => {
-    if (area !== 'local' || !changes[SETTINGS_STORAGE_KEY]) {
+    if (area && area !== 'local') {
       return;
     }
-    listener(migrateSettings(changes[SETTINGS_STORAGE_KEY].newValue));
+    const change = changes[SETTINGS_STORAGE_KEY];
+    if (!change) {
+      return;
+    }
+    listener(migrateSettings(change.newValue));
   };
   browser.storage.onChanged.addListener(handler);
   return () => browser.storage.onChanged.removeListener(handler);

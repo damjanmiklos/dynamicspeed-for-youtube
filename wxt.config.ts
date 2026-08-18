@@ -1,5 +1,40 @@
+import { EventEmitter } from 'node:events';
+import fs from 'node:fs';
+import path from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'wxt';
+
+const SCRATCH_IGNORED = [
+  '**/scratch/**',
+  '**/node_modules/**',
+  '**/.git/**',
+  '**/dist/**',
+];
+
+function isScratchPath(target: fs.PathLike): boolean {
+  const normalized = path.resolve(String(target)).replaceAll('\\', '/');
+  return normalized.includes('/scratch/');
+}
+
+/** Chrome profile files under scratch/ lock fs.watch and crash Vite. */
+function ignoreScratchFsWatch() {
+  const originalWatch = fs.watch;
+  fs.watch = ((filename: fs.PathLike, ...rest: unknown[]) => {
+    if (isScratchPath(filename)) {
+      const watcher = new EventEmitter() as fs.FSWatcher;
+      watcher.close = () => undefined;
+      watcher.ref = () => watcher;
+      watcher.unref = () => watcher;
+      return watcher;
+    }
+    return (originalWatch as (...args: unknown[]) => fs.FSWatcher)(
+      filename,
+      ...rest,
+    );
+  }) as typeof fs.watch;
+
+  return { name: 'ignore-scratch-fs-watch' };
+}
 
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
@@ -10,10 +45,10 @@ export default defineConfig({
     firefoxDataCollection: true,
   },
   vite: () => ({
-    plugins: [tailwindcss()],
+    plugins: [ignoreScratchFsWatch(), tailwindcss()],
     server: {
       watch: {
-        ignored: ['**/scratch/**', '**/node_modules/**'],
+        ignored: SCRATCH_IGNORED,
       },
     },
   }),

@@ -2,6 +2,27 @@ import { loadSettings, migrateSettings, saveSettings } from '../lib/settings/sto
 import { SETTINGS_STORAGE_KEY } from '../lib/settings/schema';
 import { RUNTIME_SOURCE, type RuntimeMessage } from '../lib/messaging/protocol';
 
+async function notifyYouTubeTabs(): Promise<void> {
+  const tabs = await browser.tabs.query({
+    url: [
+      '*://*.youtube.com/*',
+      '*://youtube.com/*',
+      '*://*.youtube-nocookie.com/*',
+    ],
+  });
+  const message: RuntimeMessage = {
+    source: RUNTIME_SOURCE,
+    type: 'SETTINGS_CHANGED',
+  };
+  await Promise.all(
+    tabs.map((tab) =>
+      tab.id != null
+        ? browser.tabs.sendMessage(tab.id, message).catch(() => undefined)
+        : Promise.resolve(),
+    ),
+  );
+}
+
 export default defineBackground(() => {
   void (async () => {
     const stored = await browser.storage.local.get(SETTINGS_STORAGE_KEY);
@@ -11,6 +32,16 @@ export default defineBackground(() => {
 
   browser.runtime.onInstalled.addListener(() => {
     void loadSettings().then(saveSettings);
+  });
+
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area && area !== 'local') {
+      return;
+    }
+    if (!changes[SETTINGS_STORAGE_KEY]) {
+      return;
+    }
+    void notifyYouTubeTabs();
   });
 
   browser.commands.onCommand.addListener(async (command) => {

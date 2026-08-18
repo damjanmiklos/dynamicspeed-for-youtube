@@ -11,9 +11,9 @@ const EASY_WORDS = new Set(
 export function normalizeLexeme(text: string): string {
   return text
     .toLowerCase()
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u02BC\uFF07]/g, "'")
     .replace(/^[^\p{L}\p{N}']+/gu, '')
-    .replace(/[^\p{L}\p{N}']+$/gu, '')
-    .replace(/'/g, "'");
+    .replace(/[^\p{L}\p{N}']+$/gu, '');
 }
 
 export function countSyllables(text: string): number {

@@ -1,13 +1,17 @@
 import {
   buildSpeedCurve,
   curveBuildInputFromSettings,
+  introRate,
   rateAt,
   RATE_JUMP_EPSILON,
   slewStep,
   wpmAt,
   type SpeedCurve,
 } from '../pacing';
+import { clamp } from '../pacing/feel';
+import { FALLBACK_SLEW_SEC, INTRO_SLEW_SEC } from '../settings/limits';
 import type { DynamicSpeedSettings } from '../settings/schema';
+import { speedCalculationChanged } from '../settings/diff';
 import { resolveForPage, type ResolvedPlaybackSettings } from '../settings/resolve';
 import type { WordToken } from '../transcript/types';
 import { isAdShowing, findMainVideo } from './ads';
@@ -18,7 +22,7 @@ import {
   removePlayerChip,
   upsertPlayerChip,
 } from './chip';
-import { applyPreservesPitch, setPlaybackRate } from './playback';
+import { applyPreservesPitch, isExternalRateChange, setPlaybackRate } from './playback';
 import { isShortsPath, parseVideoId } from './video-id';
 import type { PageState } from '../messaging/protocol';
 
@@ -40,6 +44,9 @@ export function createPlaybackController(hooks: ControllerHooks) {
   let video: HTMLVideoElement | null = null;
   let destroyed = false;
   let transcriptStatus = 'idle';
+  let introActive = false;
+  let introStartedAt = 0;
+  let introFrom = 1;
   let stopChrome: (() => void) | null = null;
   let stopLoop: (() => void) | null = null;
   let onChipClick: (() => void) | null = null;
@@ -84,7 +91,12 @@ export function createPlaybackController(hooks: ControllerHooks) {
       }
       return;
     }
+    if (video) {
+      video.removeEventListener('ratechange', onRateChange);
+      video.removeEventListener('seeked', onSeeked);
+    }
     video = next;
+    introActive = false;
     if (video) {
       applyPreservesPitch(video);
       applied = video.playbackRate || 1;
@@ -98,7 +110,9 @@ export function createPlaybackController(hooks: ControllerHooks) {
     if (!video) {
       return;
     }
-    if (performance.now() < weSetRateUntil) {
+    if (
+      !isExternalRateChange(video.playbackRate, applied, performance.now(), weSetRateUntil)
+    ) {
       return;
     }
     const current = resolved();
@@ -110,7 +124,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
   }
 
   function onSeeked(): void {
-    if (!video || !curve) {
+    if (!video || !curve || introActive) {
       return;
     }
     const current = resolved();
@@ -123,6 +137,14 @@ export function createPlaybackController(hooks: ControllerHooks) {
     } else {
       applied = desired;
     }
+  }
+
+  function cancelIntro(): void {
+    introActive = false;
+  }
+
+  function fallbackRate(current: ResolvedPlaybackSettings): number {
+    return clamp(current.fallbackSpeed, current.minSpeed, current.maxSpeed);
   }
 
   function tick(): void {
@@ -148,6 +170,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
     }
 
     if (!current.automationAllowed || forceHold != null) {
+      cancelIntro();
       if (current.restore1xWhenDisabled && forceHold == null) {
         commitRate(1);
       } else if (forceHold != null) {
@@ -158,12 +181,21 @@ export function createPlaybackController(hooks: ControllerHooks) {
     }
 
     if (now < overrideUntil) {
+      cancelIntro();
       updateChip(video.playbackRate, current, 'manual');
       return;
     }
 
     if (!curve) {
-      updateChip(video.playbackRate, current);
+      cancelIntro();
+      const desired = fallbackRate(current);
+      const limit = Math.max(
+        current.slewRateLimit,
+        Math.abs(desired - applied) / FALLBACK_SLEW_SEC,
+      );
+      applied = slewStep(applied, desired, dt, limit);
+      commitRate(applied);
+      updateChip(applied, current);
       return;
     }
 
@@ -173,11 +205,18 @@ export function createPlaybackController(hooks: ControllerHooks) {
       Math.abs(desired - applied) > RATE_JUMP_EPSILON;
     lastVideoTime = video.currentTime;
 
-    if (jumped) {
+    if (jumped && !introActive) {
       slewing = true;
     }
 
-    if (slewing) {
+    if (introActive) {
+      const elapsed = (now - introStartedAt) / 1000;
+      applied = introRate(introFrom, desired, elapsed, INTRO_SLEW_SEC);
+      if (elapsed >= INTRO_SLEW_SEC) {
+        cancelIntro();
+        applied = desired;
+      }
+    } else if (slewing) {
       applied = slewStep(applied, desired, dt, current.slewRateLimit);
       if (Math.abs(applied - desired) < 0.01) {
         applied = desired;
@@ -236,41 +275,48 @@ export function createPlaybackController(hooks: ControllerHooks) {
       if (destroyed) {
         return;
       }
-      if (video && typeof video.requestVideoFrameCallback === 'function') {
-        handle = video.requestVideoFrameCallback(step);
-      } else {
-        handle = requestAnimationFrame(step);
-      }
+      // rAF keeps running while paused. requestVideoFrameCallback does not, and
+      // that used to freeze speed updates until the content script restarted.
+      handle = requestAnimationFrame(step);
     };
     step();
     stopLoop = () => {
-      if (video && typeof video.cancelVideoFrameCallback === 'function') {
-        try {
-          video.cancelVideoFrameCallback(handle);
-        } catch {
-          cancelAnimationFrame(handle);
-        }
-      } else {
-        cancelAnimationFrame(handle);
-      }
+      cancelAnimationFrame(handle);
     };
   }
 
   return {
     setSettings(next: DynamicSpeedSettings) {
-      if (settings && next.enabled !== settings.enabled) {
+      const previous = settings;
+      if (previous && next.enabled !== previous.enabled) {
         forceHold = null;
       }
+      const recalculate =
+        !previous || speedCalculationChanged(previous, next);
       settings = next;
       rebuildCurve(video?.duration);
-      if (curve) {
-        slewing = true;
+      if (recalculate) {
+        overrideUntil = 0;
+        if (curve && !introActive) {
+          slewing = true;
+        }
       }
     },
     setTokens(next: WordToken[], status: string) {
+      const hadCurve = Boolean(curve);
       tokens = next;
       transcriptStatus = status;
       rebuildCurve(video?.duration);
+      if (!hadCurve && curve) {
+        introFrom = applied;
+        introStartedAt = performance.now();
+        introActive = true;
+        slewing = false;
+      } else if (!curve) {
+        cancelIntro();
+      } else if (hadCurve) {
+        slewing = true;
+      }
     },
     setTranscriptStatus(status: string) {
       transcriptStatus = status;

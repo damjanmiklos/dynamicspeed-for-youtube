@@ -10,3 +10,17 @@ export function setPlaybackRate(video: HTMLVideoElement, rate: number): void {
     video.playbackRate = rate;
   }
 }
+
+/** True when the player rate came from YouTube’s UI, not from our last write. */
+export function isExternalRateChange(
+  videoRate: number,
+  appliedRate: number,
+  now: number,
+  ignoreUntil: number,
+  epsilon = 0.03,
+): boolean {
+  if (now < ignoreUntil) {
+    return false;
+  }
+  return Math.abs(videoRate - appliedRate) > epsilon;
+}

@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Knob } from '../../ui/components/Knob';
 import { SliderField } from '../../ui/components/SliderField';
+import { SelectField } from '../../ui/components/SelectField';
+import { SupportLink } from '../../ui/components/SupportLink';
 import { Toggle } from '../../ui/components/Toggle';
 import { useSettings } from '../../ui/hooks/useSettings';
 import { resetSettings } from '../../lib/settings/storage';
 import { clearTranscriptCache } from '../../lib/youtube/cache';
 import { resolveDynamics } from '../../lib/pacing/feel';
+import { LIMITS } from '../../lib/settings/limits';
+import { CAPTION_LANGUAGES } from '../../lib/settings/caption-languages';
 
 const NAV = [
   { id: 'general', label: 'General' },
@@ -75,10 +79,14 @@ export function OptionsApp() {
               </button>
             ))}
           </nav>
+          <div className="mt-8">
+            <SupportLink />
+          </div>
         </aside>
 
         <main className="min-w-0 flex-1 px-5 py-8 md:px-10">
-          <div className="mb-6 flex gap-2 overflow-auto md:hidden">
+          <div className="mb-6 flex items-center justify-between gap-3 md:hidden">
+            <div className="flex gap-2 overflow-auto">
             {NAV.map((item) => (
               <button
                 key={item.id}
@@ -90,6 +98,8 @@ export function OptionsApp() {
                 {item.label}
               </button>
             ))}
+            </div>
+            <SupportLink compact />
           </div>
 
           {section === 'general' && (
@@ -113,8 +123,9 @@ export function OptionsApp() {
               >
                 <SliderField
                   label=""
-                  min={80}
-                  max={400}
+                  min={LIMITS.targetWpm.min}
+                  max={LIMITS.targetWpm.max}
+                  step={LIMITS.targetWpm.step}
                   value={settings.targetWpm}
                   unit=" WPM"
                   onChange={(targetWpm) => void update({ targetWpm })}
@@ -123,10 +134,10 @@ export function OptionsApp() {
               <Row title="Minimum speed" hint="Never go slower than this, even for very fast talkers.">
                 <SliderField
                   label=""
-                  min={0.25}
-                  max={Math.max(0.5, settings.maxSpeed - 0.05)}
-                  step={0.05}
-                  decimals={2}
+                  min={LIMITS.minSpeed.min}
+                  max={Math.min(LIMITS.minSpeed.max, Math.max(0.5, settings.maxSpeed - 0.05))}
+                  step={LIMITS.minSpeed.step}
+                  decimals={LIMITS.minSpeed.decimals}
                   value={settings.minSpeed}
                   unit="×"
                   onChange={(minSpeed) => void update({ minSpeed })}
@@ -135,13 +146,28 @@ export function OptionsApp() {
               <Row title="Maximum speed" hint="Cap for slow speech and optional b-roll skipping.">
                 <SliderField
                   label=""
-                  min={Math.min(4.9, settings.minSpeed + 0.05)}
-                  max={5}
-                  step={0.05}
-                  decimals={2}
+                  min={Math.max(LIMITS.maxSpeed.min, Math.min(4.9, settings.minSpeed + 0.05))}
+                  max={LIMITS.maxSpeed.max}
+                  step={LIMITS.maxSpeed.step}
+                  decimals={LIMITS.maxSpeed.decimals}
                   value={settings.maxSpeed}
                   unit="×"
                   onChange={(maxSpeed) => void update({ maxSpeed })}
+                />
+              </Row>
+              <Row
+                title="Default speed"
+                hint="Used before captions are ready, and whenever a transcript cannot be found."
+              >
+                <SliderField
+                  label=""
+                  min={LIMITS.fallbackSpeed.min}
+                  max={LIMITS.fallbackSpeed.max}
+                  step={LIMITS.fallbackSpeed.step}
+                  decimals={LIMITS.fallbackSpeed.decimals}
+                  value={settings.fallbackSpeed}
+                  unit="×"
+                  onChange={(fallbackSpeed) => void update({ fallbackSpeed })}
                 />
               </Row>
               <div className="grid items-center gap-6 py-6 md:grid-cols-[1fr_auto]">
@@ -159,11 +185,11 @@ export function OptionsApp() {
                   onChange={(responsiveness) => void update({ responsiveness })}
                 />
               </div>
-              <Row title="Caption language" hint="Preferred caption track, for example en or en-US.">
-                <input
-                  className="w-full rounded-lg border border-ds-border bg-ds-surface px-3 py-2"
+              <Row title="Caption language" hint="Preferred caption track when several exist.">
+                <SelectField
                   value={settings.captionLanguage}
-                  onChange={(event) => void update({ captionLanguage: event.target.value })}
+                  options={CAPTION_LANGUAGES}
+                  onChange={(captionLanguage) => void update({ captionLanguage })}
                 />
               </Row>
               <div className="mt-6 flex flex-wrap gap-3">
@@ -243,10 +269,10 @@ export function OptionsApp() {
               >
                 <SliderField
                   label=""
-                  min={1}
-                  max={1.5}
-                  step={0.01}
-                  decimals={2}
+                  min={LIMITS.jargonCompensation.min}
+                  max={LIMITS.jargonCompensation.max}
+                  step={LIMITS.jargonCompensation.step}
+                  decimals={LIMITS.jargonCompensation.decimals}
                   value={settings.jargonCompensation}
                   onChange={(jargonCompensation) => void update({ jargonCompensation })}
                 />
@@ -270,10 +296,10 @@ export function OptionsApp() {
               >
                 <SliderField
                   label=""
-                  min={2}
-                  max={30}
-                  step={0.5}
-                  decimals={1}
+                  min={LIMITS.gaussianSigma.min}
+                  max={LIMITS.gaussianSigma.max}
+                  step={LIMITS.gaussianSigma.step}
+                  decimals={LIMITS.gaussianSigma.decimals}
                   value={settings.gaussianSigma}
                   unit="s"
                   onChange={(gaussianSigma) => void update({ gaussianSigma })}
@@ -285,10 +311,10 @@ export function OptionsApp() {
               >
                 <SliderField
                   label=""
-                  min={1}
-                  max={15}
-                  step={0.5}
-                  decimals={1}
+                  min={LIMITS.medianWindowSec.min}
+                  max={LIMITS.medianWindowSec.max}
+                  step={LIMITS.medianWindowSec.step}
+                  decimals={LIMITS.medianWindowSec.decimals}
                   value={settings.medianWindowSec}
                   unit="s"
                   onChange={(medianWindowSec) => void update({ medianWindowSec })}
@@ -300,10 +326,10 @@ export function OptionsApp() {
               >
                 <SliderField
                   label=""
-                  min={0.05}
-                  max={2}
-                  step={0.05}
-                  decimals={2}
+                  min={LIMITS.slewRateLimit.min}
+                  max={LIMITS.slewRateLimit.max}
+                  step={LIMITS.slewRateLimit.step}
+                  decimals={LIMITS.slewRateLimit.decimals}
                   value={settings.slewRateLimit}
                   unit="×/s"
                   onChange={(slewRateLimit) => void update({ slewRateLimit })}
@@ -312,10 +338,10 @@ export function OptionsApp() {
               <Row title="Minimum caption chunk" hint="Merge tiny caption fragments below this duration.">
                 <SliderField
                   label=""
-                  min={0.1}
-                  max={1}
-                  step={0.05}
-                  decimals={2}
+                  min={LIMITS.minChunkSec.min}
+                  max={LIMITS.minChunkSec.max}
+                  step={LIMITS.minChunkSec.step}
+                  decimals={LIMITS.minChunkSec.decimals}
                   value={settings.minChunkSec}
                   unit="s"
                   onChange={(minChunkSec) => void update({ minChunkSec })}
@@ -346,10 +372,10 @@ export function OptionsApp() {
               <Row title="Long pause" hint="Gap length that counts as a pause rather than slow speech.">
                 <SliderField
                   label=""
-                  min={0.5}
-                  max={5}
-                  step={0.1}
-                  decimals={1}
+                  min={LIMITS.longPauseSec.min}
+                  max={LIMITS.longPauseSec.max}
+                  step={LIMITS.longPauseSec.step}
+                  decimals={LIMITS.longPauseSec.decimals}
                   value={settings.longPauseSec}
                   unit="s"
                   onChange={(longPauseSec) => void update({ longPauseSec })}
@@ -491,8 +517,9 @@ export function OptionsApp() {
               >
                 <SliderField
                   label=""
-                  min={0}
-                  max={60}
+                  min={LIMITS.manualOverrideTimeoutSec.min}
+                  max={LIMITS.manualOverrideTimeoutSec.max}
+                  step={LIMITS.manualOverrideTimeoutSec.step}
                   value={settings.manualOverrideTimeoutSec}
                   unit="s"
                   onChange={(manualOverrideTimeoutSec) =>
@@ -527,9 +554,9 @@ export function OptionsApp() {
               <Row title="Chip decimals" hint="1.5× vs 1.47×.">
                 <SliderField
                   label=""
-                  min={1}
-                  max={2}
-                  step={1}
+                  min={LIMITS.chipDecimalPlaces.min}
+                  max={LIMITS.chipDecimalPlaces.max}
+                  step={LIMITS.chipDecimalPlaces.step}
                   value={settings.chipDecimalPlaces}
                   onChange={(chipDecimalPlaces) =>
                     void update({ chipDecimalPlaces: chipDecimalPlaces as 1 | 2 })
@@ -585,6 +612,9 @@ export function OptionsApp() {
               >
                 Clear caption cache
               </button>
+              <div className="mt-8">
+                <SupportLink />
+              </div>
             </section>
           )}
         </main>

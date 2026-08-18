@@ -49,4 +49,20 @@ describe('parseJson3', () => {
     );
     expect(tokens.map((token) => token.text).join(' ')).toContain("It's");
   });
+
+  it('does not double-unescape nested HTML entities', () => {
+    const tokens = parseJson3(
+      {
+        events: [
+          {
+            tStartMs: 0,
+            dDurationMs: 1000,
+            segs: [{ utf8: '&amp;lt;script&amp;gt;' }],
+          },
+        ],
+      },
+      { syllableWeighting: false },
+    );
+    expect(tokens.map((token) => token.text).join(' ')).toBe('&lt;script&gt;');
+  });
 });

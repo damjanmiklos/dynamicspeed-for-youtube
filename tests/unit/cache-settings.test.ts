@@ -7,6 +7,10 @@ import {
 } from '../../src/lib/youtube/cache';
 import { parseSettings } from '../../src/lib/settings/defaults';
 import { DynamicSpeedSettingsSchema } from '../../src/lib/settings/schema';
+import {
+  captionSourceChanged,
+  speedCalculationChanged,
+} from '../../src/lib/settings/diff';
 import { isBridgeMessage, isYouTubeOrigin } from '../../src/lib/bridge/protocol';
 import {
   forceJson3Url,
@@ -14,7 +18,7 @@ import {
   toSafeTimedTextUrl,
   videoIdFromTimedTextUrl,
 } from '../../src/lib/transcript/select-track';
-import { parseVideoId } from '../../src/lib/youtube/video-id';
+import { parseVideoId, isYouTubeTabUrl } from '../../src/lib/youtube/video-id';
 
 describe('transcript LRU cache', () => {
   it('evicts oldest entries when over the video cap', () => {
@@ -66,6 +70,7 @@ describe('settings schema', () => {
   it('fills defaults', () => {
     const settings = parseSettings({});
     expect(settings.targetWpm).toBe(165);
+    expect(settings.fallbackSpeed).toBe(1);
     expect(settings.minSpeed).toBeLessThan(settings.maxSpeed);
   });
 
@@ -87,6 +92,25 @@ describe('settings schema', () => {
       maxSpeed: 2,
     });
     expect(parsed.success).toBe(false);
+  });
+});
+
+describe('settings that change speed', () => {
+  it('detects target WPM and engine changes, not chip cosmetics', () => {
+    const base = parseSettings({});
+    expect(speedCalculationChanged(base, { ...base, targetWpm: 220 })).toBe(true);
+    expect(speedCalculationChanged(base, { ...base, bRollAcceleration: true })).toBe(
+      true,
+    );
+    expect(speedCalculationChanged(base, { ...base, showPlayerChip: false })).toBe(
+      false,
+    );
+  });
+
+  it('detects caption source changes that need a new transcript', () => {
+    const base = parseSettings({});
+    expect(captionSourceChanged(base, { ...base, captionLanguage: 'de' })).toBe(true);
+    expect(captionSourceChanged(base, { ...base, targetWpm: 200 })).toBe(false);
   });
 });
 
@@ -169,5 +193,15 @@ describe('video id parser', () => {
     expect(parseVideoId('https://www.youtube.com/embed/abcdefghijk')).toBe(
       'abcdefghijk',
     );
+  });
+
+  it('rejects URLs that only mention youtube.com as a substring', () => {
+    expect(isYouTubeTabUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe(true);
+    expect(isYouTubeTabUrl('https://music.youtube.com/watch?v=dQw4w9WgXcQ')).toBe(
+      true,
+    );
+    expect(isYouTubeTabUrl('https://evil.example/youtube.com')).toBe(false);
+    expect(isYouTubeTabUrl('https://youtube.com.evil.example/watch')).toBe(false);
+    expect(isYouTubeTabUrl('https://notyoutube.com/watch')).toBe(false);
   });
 });

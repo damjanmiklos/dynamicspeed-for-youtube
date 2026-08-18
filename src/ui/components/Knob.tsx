@@ -1,15 +1,25 @@
+import { EditableNumber } from './EditableNumber';
+
 type Props = {
   value: number;
   onChange: (value: number) => void;
   disabled?: boolean;
   label?: string;
+  compact?: boolean;
 };
 
-export function Knob({ value, onChange, disabled, label = 'Responsiveness' }: Props) {
+export function Knob({
+  value,
+  onChange,
+  disabled,
+  label = 'Responsiveness',
+  compact = false,
+}: Props) {
   const angle = -135 + value * 270;
+  const sizeClass = compact ? 'h-14 w-14' : 'h-28 w-28';
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="relative h-28 w-28">
+    <div className="flex flex-col items-center gap-1.5">
+      <div className={`relative ${sizeClass}`}>
         <svg viewBox="0 0 120 120" className="h-full w-full">
           <circle cx="60" cy="60" r="46" fill="#16181f" stroke="#2c313c" strokeWidth="8" />
           <path
@@ -38,8 +48,17 @@ export function Knob({ value, onChange, disabled, label = 'Responsiveness' }: Pr
         />
       </div>
       <div className="text-center">
-        <div className="text-xs uppercase tracking-[0.14em] text-ds-muted">{label}</div>
-        <div className="font-mono text-sm text-ds-text">{Math.round(value * 100)}</div>
+        <div className="text-[10px] uppercase tracking-[0.14em] text-ds-muted">{label}</div>
+        <EditableNumber
+          value={Math.round(value * 100)}
+          min={0}
+          max={100}
+          step={1}
+          decimals={0}
+          className="text-ds-text"
+          onChange={(next) => onChange(next / 100)}
+          disabled={disabled}
+        />
       </div>
     </div>
   );

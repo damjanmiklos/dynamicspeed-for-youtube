@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { pchipEvaluate, pchipSlopes } from '../../src/lib/pacing/pchip';
-import { slewStep } from '../../src/lib/pacing/slew';
+import { introRate, slewStep } from '../../src/lib/pacing/slew';
+import { isExternalRateChange } from '../../src/lib/youtube/playback';
 import { resolveDynamics } from '../../src/lib/pacing/feel';
 import { mapWpmToRate } from '../../src/lib/pacing/curve';
 import { gaussianSmooth } from '../../src/lib/pacing/gaussian';
 import { movingMedian } from '../../src/lib/pacing/median';
-import { isJargonWord, countSyllables } from '../../src/lib/pacing/syllables';
+import { isJargonWord, countSyllables, normalizeLexeme } from '../../src/lib/pacing/syllables';
 
 describe('PCHIP', () => {
   it('does not overshoot a monotone pair', () => {
@@ -30,6 +31,33 @@ describe('slew', () => {
 
   it('snaps when the delta fits in the window', () => {
     expect(slewStep(1, 1.1, 1, 0.5)).toBeCloseTo(1.1, 8);
+  });
+});
+
+describe('intro interpolation', () => {
+  it('starts at the fallback speed and lands on the target', () => {
+    expect(introRate(1, 2, 0, 2)).toBeCloseTo(1, 8);
+    expect(introRate(1, 2, 2, 2)).toBeCloseTo(2, 8);
+    expect(introRate(1, 2, 4, 2)).toBeCloseTo(2, 8);
+  });
+
+  it('is between the endpoints at the midpoint', () => {
+    const mid = introRate(1, 2, 1, 2);
+    expect(mid).toBeGreaterThan(1);
+    expect(mid).toBeLessThan(2);
+    expect(mid).toBeCloseTo(1.5, 8);
+  });
+});
+
+describe('external rate changes', () => {
+  it('ignores our own writes and tiny rounding', () => {
+    expect(isExternalRateChange(1.5, 1.5, 200, 150)).toBe(false);
+    expect(isExternalRateChange(1.51, 1.5, 200, 150)).toBe(false);
+    expect(isExternalRateChange(1.5, 1.5, 100, 150)).toBe(false);
+  });
+
+  it('treats a real YouTube menu change as external', () => {
+    expect(isExternalRateChange(2, 1.5, 200, 100)).toBe(true);
   });
 });
 
@@ -121,5 +149,10 @@ describe('jargon', () => {
 
   it('does not treat easy short words as jargon', () => {
     expect(isJargonWord('because', countSyllables('because'))).toBe(false);
+  });
+
+  it('normalizes typographic apostrophes instead of replacing ASCII with itself', () => {
+    expect(normalizeLexeme('don’t')).toBe("don't");
+    expect(normalizeLexeme("don't")).toBe("don't");
   });
 });

@@ -1,3 +1,5 @@
+import { EditableNumber } from './EditableNumber';
+
 type Props = {
   label: string;
   hint?: string;
@@ -7,6 +9,7 @@ type Props = {
   step?: number;
   unit?: string;
   decimals?: number;
+  compact?: boolean;
   onChange: (value: number) => void;
 };
 
@@ -19,28 +22,35 @@ export function SliderField({
   step = 1,
   unit = '',
   decimals = 0,
+  compact = false,
   onChange,
 }: Props) {
   return (
-    <label className="block space-y-2">
+    <div className={compact ? 'block space-y-1' : 'block space-y-2'}>
       <div className="flex items-end justify-between gap-3">
         <div>
-          <div className="text-sm font-medium text-ds-text">{label}</div>
+          {label ? <div className="text-sm font-medium text-ds-text">{label}</div> : null}
           {hint ? <div className="text-xs text-ds-muted">{hint}</div> : null}
         </div>
-        <div className="font-mono text-sm text-ds-accent">
-          {value.toFixed(decimals)}
-          {unit}
-        </div>
+        <EditableNumber
+          value={value}
+          min={min}
+          max={max}
+          step={step}
+          decimals={decimals}
+          unit={unit}
+          onChange={onChange}
+        />
       </div>
       <input
         type="range"
         min={min}
         max={max}
         step={step}
-        value={value}
+        value={Math.min(max, Math.max(min, value))}
+        aria-label={label || 'Slider'}
         onChange={(event) => onChange(Number(event.target.value))}
       />
-    </label>
+    </div>
   );
 }

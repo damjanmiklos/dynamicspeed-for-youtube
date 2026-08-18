@@ -23,7 +23,8 @@ export type RuntimeMessage =
   | { source: typeof RUNTIME_SOURCE; type: 'TOGGLE_CHANNEL' }
   | { source: typeof RUNTIME_SOURCE; type: 'TOGGLE_VIDEO' }
   | { source: typeof RUNTIME_SOURCE; type: 'OPEN_OPTIONS' }
-  | { source: typeof RUNTIME_SOURCE; type: 'COMMAND'; command: string };
+  | { source: typeof RUNTIME_SOURCE; type: 'COMMAND'; command: string }
+  | { source: typeof RUNTIME_SOURCE; type: 'SETTINGS_CHANGED' };
 
 export function isRuntimeMessage(data: unknown): data is RuntimeMessage {
   return Boolean(

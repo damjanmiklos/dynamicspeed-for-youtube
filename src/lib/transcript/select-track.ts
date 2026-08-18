@@ -1,19 +1,5 @@
 import type { CaptionTrack } from './types';
-
-const TIMEDTEXT_HOSTS = new Set([
-  'www.youtube.com',
-  'youtube.com',
-  'm.youtube.com',
-  'www.youtube-nocookie.com',
-  'youtube-nocookie.com',
-  'music.youtube.com',
-]);
-
-export const YOUTUBE_PAGE_HOSTS = TIMEDTEXT_HOSTS;
-
-export function isAllowedYouTubeHost(hostname: string): boolean {
-  return TIMEDTEXT_HOSTS.has(hostname.toLowerCase());
-}
+import { isAllowedYouTubeHost } from '../youtube/video-id';
 
 export function isAllowedTimedTextUrl(
   raw: string,

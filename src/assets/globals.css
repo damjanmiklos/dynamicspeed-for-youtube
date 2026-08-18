@@ -1,4 +1,5 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../");
+@source not "../../scratch";
 
 @theme {
   --font-sans: "Segoe UI", system-ui, sans-serif;
@@ -23,6 +24,14 @@ body,
   background: var(--color-ds-bg);
   color: var(--color-ds-text);
   font-family: var(--font-sans);
+}
+
+html.popup,
+html.popup body,
+html.popup #root {
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 * {

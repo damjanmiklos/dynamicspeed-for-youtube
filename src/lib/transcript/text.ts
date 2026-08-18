@@ -1,18 +1,28 @@
+function fromEntityCodePoint(value: number): string {
+  if (!Number.isInteger(value) || value < 1 || value > 0x10ffff) {
+    return '';
+  }
+  if (value >= 0xd800 && value <= 0xdfff) {
+    return '';
+  }
+  return String.fromCodePoint(value);
+}
+
 export function decodeHtmlEntities(value: string): string {
   return value
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
     .replace(/&apos;/gi, "'")
     .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) =>
-      String.fromCodePoint(Number.parseInt(hex, 16)),
+      fromEntityCodePoint(Number.parseInt(hex, 16)),
     )
     .replace(/&#(\d+);/g, (_, dec: string) =>
-      String.fromCodePoint(Number.parseInt(dec, 10)),
-    );
+      fromEntityCodePoint(Number.parseInt(dec, 10)),
+    )
+    .replace(/&amp;/gi, '&');
 }
 
 export const META_PATTERN =

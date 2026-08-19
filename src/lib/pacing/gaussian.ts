@@ -31,13 +31,15 @@ export function gaussianSmooth(samples: Sample[], sigmaSec: number): Sample[] {
     let valueSum = 0;
     for (let j = lo; j < hi; j += 1) {
       const dt = samples[j].t - t;
-      const weight = Math.exp(-(dt * dt) / twoSigma2);
+      const mass = Math.max(samples[j].weight ?? 1, 1e-6);
+      const weight = Math.exp(-(dt * dt) / twoSigma2) * mass;
       weightSum += weight;
       valueSum += weight * samples[j].value;
     }
     out[i] = {
       t,
       value: weightSum === 0 ? samples[i].value : valueSum / weightSum,
+      weight: samples[i].weight,
     };
   }
   return out;

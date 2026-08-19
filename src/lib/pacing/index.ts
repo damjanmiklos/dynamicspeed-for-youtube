@@ -2,7 +2,7 @@ export { clamp, lerp, smoothstep, resolveDynamics } from './feel';
 export type { Dynamics } from './feel';
 export { slewStep, slewLimitForStep, RATE_JUMP_EPSILON, introRate, isSeekJump } from './slew';
 export { pchipEvaluate, pchipSlopes, cosineInterpolate } from './pchip';
-export { median, movingMedian } from './median';
+export { median, movingMedian, weightedMedian } from './median';
 export { gaussianSmooth, emaSmooth } from './gaussian';
 export {
   buildSpeedCurve,
@@ -19,12 +19,9 @@ export {
 } from './curve';
 export type { SpeedCurve, CurveBuildOptions, SpeechChunk } from './curve';
 export {
-  estimateVoicedSec,
   spokenDutyMultiplier,
-  excludeLongPauseTails,
   wpmWithSpokenDuty,
-  ARTICULATION_REF_WPM,
-  ARTICULATION_SEC_PER_WORD,
+  WPM_WINDOW_SEC,
   SPOKEN_DUTY_WINDOW_SEC,
 } from './spoken-duty';
 export {

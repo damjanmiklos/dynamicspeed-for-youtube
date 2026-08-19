@@ -30,6 +30,24 @@ describe('parseJson3', () => {
     expect(music?.text).toMatch(/music/i);
   });
 
+  it('marks *Intro / Music* fan-caption markers as meta', () => {
+    const tokens = parseJson3(
+      {
+        events: [
+          { tStartMs: 0, dDurationMs: 6023, segs: [{ utf8: '*Intro' }] },
+          { tStartMs: 6023, dDurationMs: 6022, segs: [{ utf8: 'Music*' }] },
+          { tStartMs: 12045, dDurationMs: 203, segs: [{ utf8: "I'll" }] },
+        ],
+      },
+      { syllableWeighting: false },
+    );
+    expect(tokens.filter((token) => token.meta).map((token) => token.text)).toEqual([
+      '*Intro',
+      'Music*',
+    ]);
+    expect(tokens.some((token) => token.text === "I'll" && !token.meta)).toBe(true);
+  });
+
   it('returns an empty list for corrupt input', () => {
     expect(parseJson3({ nope: true }, { syllableWeighting: true })).toEqual([]);
   });

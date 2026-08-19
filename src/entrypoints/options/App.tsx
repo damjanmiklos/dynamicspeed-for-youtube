@@ -471,7 +471,7 @@ export function OptionsApp() {
               </Row>
               <Row
                 title="Spoken-time compensation"
-                hint="When lists or commentary leave short gaps between words, raise estimated WPM toward the rate during actual speech. 0% is off; 100% fully ignores those short gaps. Long pauses are not included."
+                hint="Only for captions that leave timestamp holes between words. Auto-captions that abut word times are already measured as listening WPM. 0% uses video time; 100% ignores short gaps."
                 help={SETTINGS_HELP.spokenDuty}
               >
                 <SliderField

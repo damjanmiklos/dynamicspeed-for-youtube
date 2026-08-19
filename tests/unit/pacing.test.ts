@@ -5,7 +5,7 @@ import { isExternalRateChange } from '../../src/lib/youtube/playback';
 import { resolveDynamics } from '../../src/lib/pacing/feel';
 import { mapWpmToRate } from '../../src/lib/pacing/curve';
 import { gaussianSmooth } from '../../src/lib/pacing/gaussian';
-import { movingMedian } from '../../src/lib/pacing/median';
+import { movingMedian, weightedMedian } from '../../src/lib/pacing/median';
 import { isJargonWord, countSyllables, normalizeLexeme, easyWordListSize } from '../../src/lib/pacing/syllables';
 
 describe('PCHIP', () => {
@@ -123,6 +123,15 @@ describe('filters', () => {
     ];
     const out = movingMedian(samples, 4);
     expect(out[2].value).toBe(150);
+  });
+
+  it('weighted median follows duration, not word count', () => {
+    expect(
+      weightedMedian([
+        { value: 100, weight: 5 },
+        { value: 400, weight: 1 },
+      ]),
+    ).toBe(100);
   });
 
   it('gaussian does not lag a symmetric bump', () => {

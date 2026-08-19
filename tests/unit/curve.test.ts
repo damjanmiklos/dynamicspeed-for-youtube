@@ -88,12 +88,15 @@ describe('speed curve', () => {
   });
 
   it('does not spike to max during a pause when b-roll is off', () => {
-    const tokens = [
-      token(0, 1, 'hello', { syllables: 2 }),
-      token(1.2, 2.2, 'there', { syllables: 1 }),
-      token(8, 9, 'later', { syllables: 2 }),
-      token(9.2, 10.2, 'on', { syllables: 1 }),
-    ];
+    const tokens: WordToken[] = [];
+    for (let i = 0; i < 8; i += 1) {
+      const t0 = i * 0.35;
+      tokens.push(token(t0, t0 + 0.3, 'hello', { syllables: 2 }));
+    }
+    for (let i = 0; i < 8; i += 1) {
+      const t0 = 8 + i * 0.35;
+      tokens.push(token(t0, t0 + 0.3, 'later', { syllables: 2 }));
+    }
     const curve = buildSpeedCurve(tokens, options({ bRollAcceleration: false, maxSpeed: 3 }));
     const before = rateAt(curve, 1.5);
     const during = rateAt(curve, 5);
@@ -102,7 +105,7 @@ describe('speed curve', () => {
     const hi = Math.max(before, after);
     expect(during).toBeGreaterThanOrEqual(lo - 0.05);
     expect(during).toBeLessThanOrEqual(hi + 0.05);
-    expect(during).toBeLessThan(3);
+    expect(during).toBeLessThan(2.5);
   });
 
   it('heads toward max speed in a long pause when b-roll is on', () => {
@@ -154,7 +157,7 @@ describe('speed curve', () => {
   it('slows list-like sparse words when spoken-time compensation is on', () => {
     const tokens: WordToken[] = [];
     for (let i = 0; i < 10; i += 1) {
-      tokens.push(token(i, i + 1, 'item'));
+      tokens.push(token(i, i + 0.2, 'item'));
     }
     const sparseOpts = {
       syllableWeighting: false,
@@ -174,12 +177,15 @@ describe('speed curve', () => {
   });
 
   it('does not speed through a long pause when compensation is on and b-roll is off', () => {
-    const tokens = [
-      token(0, 1, 'hello', { syllables: 2 }),
-      token(1.2, 2.2, 'there', { syllables: 1 }),
-      token(8, 9, 'later', { syllables: 2 }),
-      token(9.2, 10.2, 'on', { syllables: 1 }),
-    ];
+    const tokens: WordToken[] = [];
+    for (let i = 0; i < 8; i += 1) {
+      const t0 = i * 0.35;
+      tokens.push(token(t0, t0 + 0.3, 'hello', { syllables: 2 }));
+    }
+    for (let i = 0; i < 8; i += 1) {
+      const t0 = 8 + i * 0.35;
+      tokens.push(token(t0, t0 + 0.3, 'later', { syllables: 2 }));
+    }
     const curve = buildSpeedCurve(
       tokens,
       options({ bRollAcceleration: false, maxSpeed: 3, spokenDutyStrength: 0.5 }),
@@ -191,7 +197,7 @@ describe('speed curve', () => {
     const hi = Math.max(before, after);
     expect(during).toBeGreaterThanOrEqual(lo - 0.08);
     expect(during).toBeLessThanOrEqual(hi + 0.08);
-    expect(during).toBeLessThan(3);
+    expect(during).toBeLessThan(2.5);
   });
 
   it('still heads toward max speed in a long pause when b-roll is on', () => {

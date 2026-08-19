@@ -3,11 +3,7 @@ import { clamp, resolveDynamics, type Dynamics } from './feel';
 import { gaussianSmooth, emaSmooth } from './gaussian';
 import { movingMedian, type Sample } from './median';
 import { pchipEvaluate, pchipSlopes } from './pchip';
-import {
-  excludeLongPauseTails,
-  SPOKEN_DUTY_WINDOW_SEC,
-  wpmWithSpokenDuty,
-} from './spoken-duty';
+import { WPM_WINDOW_SEC, wpmWithSpokenDuty } from './spoken-duty';
 import { effectiveWords } from './syllables';
 import { wpmAdjustmentCalibration } from './wpm-calibration';
 
@@ -140,7 +136,11 @@ export function splitSpeechSegments(
 }
 
 function samplesFrom(chunks: SpeechChunk[]): Sample[] {
-  return chunks.map((chunk) => ({ t: chunk.t, value: chunk.wpm }));
+  return chunks.map((chunk) => ({
+    t: chunk.t,
+    value: chunk.wpm,
+    weight: Math.max(chunk.t1 - chunk.t0, 1e-3),
+  }));
 }
 
 function applySamples(chunks: SpeechChunk[], samples: Sample[]): SpeechChunk[] {
@@ -296,22 +296,17 @@ export function buildSpeedCurve(
 
   const merged = mergeShortChunks(tokens, options.minChunkSec, options);
   const strength = clamp(finite(options.spokenDutyStrength, 0), 0, 1);
-  const prepared =
-    strength > 0 ? excludeLongPauseTails(merged, options.longPauseSec) : merged;
-  const segments = splitSpeechSegments(prepared, options.longPauseSec);
+  const segments = splitSpeechSegments(merged, options.longPauseSec);
 
   const smoothedChunks: SpeechChunk[] = [];
   for (const segment of segments) {
-    const withWpm =
-      strength > 0
-        ? wpmWithSpokenDuty(
-            segment,
-            strength,
-            SPOKEN_DUTY_WINDOW_SEC,
-            options.wpmFloor,
-            options.wpmCeil,
-          )
-        : instantaneousWpm(segment, options.wpmFloor, options.wpmCeil);
+    const withWpm = wpmWithSpokenDuty(
+      segment,
+      strength,
+      WPM_WINDOW_SEC,
+      options.wpmFloor,
+      options.wpmCeil,
+    );
     const medianed = movingMedian(samplesFrom(withWpm), options.medianWindowSec);
     const smoothed = options.causal
       ? emaSmooth(medianed, options.gaussianSigma)

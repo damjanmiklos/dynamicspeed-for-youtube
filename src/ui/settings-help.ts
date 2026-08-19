@@ -15,8 +15,8 @@ export const SETTINGS_HELP = {
   targetWpm: {
     label: 'About Target WPM',
     body: [
-      'This is the listening pace you want, in words per minute. DynamicSpeed measures how fast the speaker is talking from caption timings, then sets playback rate ≈ target WPM ÷ spoken WPM (then clamped to Min/Max speed).',
-      'Syllable weighting, jargon compensation, and spoken-time compensation change how pace is estimated, then a constant scale for those slider values is divided back out so this number still means ordinary WPM — not an inflated internal score. Everyday conversation is often about 150–180 WPM; lectures are slower; auction-style or hyped speech is faster.',
+      'This is the listening pace you want, in words per minute. DynamicSpeed measures how fast the speaker is talking from caption timings (words per second of video time), then sets playback rate ≈ target WPM ÷ spoken WPM (then clamped to Min/Max speed).',
+      'Syllable weighting and jargon compensation change how words are counted, then a constant scale for those slider values is divided back out so this number still means ordinary WPM. Everyday conversation is often about 150–180 WPM; lectures are slower; auction-style or hyped speech is faster.',
       'The range is 80–800. Changes apply on the current video immediately, with a short ease-in so the jump is not a hard snap.',
     ],
   },
@@ -128,9 +128,9 @@ export const SETTINGS_HELP = {
   spokenDuty: {
     label: 'About spoken-time compensation',
     body: [
-      'Caption timings often include short gaps after each word, especially in lists, reaction commentary, and hunt-and-peck speech. Those gaps make spoken WPM look too low, so playback speeds up and the actual words fly by.',
-      'This control estimates what fraction of caption-covered time is really voiced, then raises WPM partway toward that articulation rate: adjusted WPM = measured WPM × ((1 − strength) + strength / spoken fraction). 0% is off (old behavior). 100% fully uses voiced time only. The default 40% is a partial correction.',
-      'A constant scale for the current strength (not for the current video) is then divided out so the toolbar and Target WPM stay in ordinary words-per-minute. Relative differences remain: list-like speech with short gaps still reads faster than packed speech. Gaps longer than Long pause are excluded here and stay under Pauses & b-roll.',
+      'YouTube auto-captions usually run each word until the next word starts, so short pauses are already inside the word timestamps. DynamicSpeed measures WPM as words per second of video time in a few-second window — not 60 divided by each word’s caption duration — so those baked-in pauses make speech look slower, which is the listening rate you actually hear.',
+      'This slider only matters when captions leave empty time between word timestamps (some manual tracks, lists, hunt-and-peck commentary). It blends toward counting only the caption spans, ignoring those holes. 0% is full video time (listening rate). 100% fully ignores short timestamp gaps. It does not assume a 300 WPM talking speed. Gaps longer than Long pause stay under Pauses & b-roll.',
+      'On typical auto-captions this control does almost nothing. Leave it at the default unless you know the track has gaps between words.',
     ],
   },
   minChunk: {

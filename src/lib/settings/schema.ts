@@ -77,5 +77,5 @@ export type DynamicSpeedSettings = z.infer<typeof DynamicSpeedSettingsSchema>;
 
 export const SETTINGS_STORAGE_KEY = 'ds.settings';
 /** Bump when parsed token timings change so stale caption caches are dropped. */
-export const TRANSCRIPT_CACHE_KEY = 'ds.transcriptCache.v4';
+export const TRANSCRIPT_CACHE_KEY = 'ds.transcriptCache.v5';
 export const SETTINGS_VERSION = 5;

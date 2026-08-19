@@ -31,6 +31,7 @@ test.describe('extension pages', () => {
     await expect(page.getByText('DynamicSpeed')).toBeVisible();
     await expect(page.getByText('Target WPM')).toBeVisible();
     await expect(page.getByText('Temporarily turn on captions to load')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Report a bug' })).toBeVisible();
     await context.close();
   });
 });

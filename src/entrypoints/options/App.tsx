@@ -4,6 +4,7 @@ import { FeelSlider } from '../../ui/components/FeelSlider';
 import { SliderField } from '../../ui/components/SliderField';
 import { SelectField } from '../../ui/components/SelectField';
 import { SupportLink } from '../../ui/components/SupportLink';
+import { ReportBugLink } from '../../ui/components/ReportBugLink';
 import { Toggle } from '../../ui/components/Toggle';
 import { InfoTip } from '../../ui/components/InfoTip';
 import { SETTINGS_HELP, type SettingHelp } from '../../ui/settings-help';
@@ -113,7 +114,7 @@ export function OptionsApp() {
   return (
     <div className="min-h-screen bg-ds-bg text-ds-text">
       <div className="mx-auto flex max-w-6xl gap-0 md:gap-8">
-        <aside className="sticky top-0 hidden h-screen w-60 shrink-0 border-r border-ds-border bg-ds-bg-2 p-6 md:block">
+        <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-ds-border bg-ds-bg-2 p-6 md:flex">
           <div className="mb-8">
             <div className="text-[11px] uppercase tracking-[0.18em] text-ds-muted">
               DynamicSpeed
@@ -135,27 +136,31 @@ export function OptionsApp() {
               </button>
             ))}
           </nav>
-          <div className="mt-8">
+          <div className="mt-auto space-y-3 pt-8">
+            <ReportBugLink />
             <SupportLink />
           </div>
         </aside>
 
         <main className="min-w-0 flex-1 px-5 py-8 md:px-10">
-          <div className="mb-6 flex items-center justify-between gap-3 md:hidden">
-            <div className="flex gap-2 overflow-auto">
-            {NAV.map((item) => (
-              <button
-                key={item.id}
-                className={`whitespace-nowrap rounded-full px-3 py-1 text-sm ${
-                  section === item.id ? 'bg-ds-accent text-white' : 'bg-ds-surface text-ds-muted'
-                }`}
-                onClick={() => setSection(item.id)}
-              >
-                {item.label}
-              </button>
-            ))}
+          <div className="mb-6 md:hidden">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex gap-2 overflow-auto">
+              {NAV.map((item) => (
+                <button
+                  key={item.id}
+                  className={`whitespace-nowrap rounded-full px-3 py-1 text-sm ${
+                    section === item.id ? 'bg-ds-accent text-white' : 'bg-ds-surface text-ds-muted'
+                  }`}
+                  onClick={() => setSection(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
+              </div>
+              <SupportLink compact />
             </div>
-            <SupportLink compact />
+            <ReportBugLink />
           </div>
 
           {section === 'general' && (

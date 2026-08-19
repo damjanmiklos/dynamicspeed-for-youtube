@@ -68,9 +68,13 @@ export function migrateSettings(input: unknown): DynamicSpeedSettings {
     typeof source.version === 'number' && Number.isFinite(source.version)
       ? source.version
       : 1;
-  // v1 defaulted minChunkSec to 0.3s, which glued ordinary words together.
+  // Older shipping defaults glued ordinary words (0.3s) or still merged more
+  // than needed (0.15s). Only rewrite those exact former defaults.
   if (previousVersion < 2 && source.minChunkSec === 0.3) {
-    source.minChunkSec = 0.15;
+    source.minChunkSec = 0.1;
+  }
+  if (previousVersion < 3 && source.minChunkSec === 0.15) {
+    source.minChunkSec = 0.1;
   }
   source.version = Math.max(previousVersion, SETTINGS_VERSION);
   return parseSettings(source);

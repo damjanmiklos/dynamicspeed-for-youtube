@@ -15,7 +15,7 @@ const options = (overrides: Partial<CurveBuildOptions> = {}): CurveBuildOptions 
   targetWpm: 180,
   minSpeed: 0.75,
   maxSpeed: 3,
-  minChunkSec: 0.15,
+  minChunkSec: 0.1,
   wpmFloor: 60,
   wpmCeil: 450,
   longPauseSec: 1.8,
@@ -69,14 +69,14 @@ describe('speed curve', () => {
     assertFiniteCurve(tokens);
   });
 
-  it('does not glue typical spoken words at the 0.15s default', () => {
+  it('does not glue typical spoken words at the 0.1s default', () => {
     const tokens = [
       token(0, 0.22, 'so'),
       token(0.22, 0.44, 'you'),
       token(0.44, 0.88, 'remember', { syllables: 3 }),
     ];
     const opts = { syllableWeighting: true, jargonCompensation: 1.15 };
-    expect(mergeShortChunks(tokens, 0.15, opts)).toHaveLength(3);
+    expect(mergeShortChunks(tokens, 0.1, opts)).toHaveLength(3);
     expect(mergeShortChunks(tokens, 0.3, opts).length).toBeLessThan(3);
   });
 

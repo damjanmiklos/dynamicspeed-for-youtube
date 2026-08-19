@@ -140,7 +140,7 @@ describe('settings schema', () => {
     const settings = parseSettings({});
     expect(settings.targetWpm).toBe(165);
     expect(settings.fallbackSpeed).toBe(1);
-    expect(settings.minChunkSec).toBe(0.15);
+    expect(settings.minChunkSec).toBe(0.1);
     expect(settings.spokenDutyStrength).toBe(0.4);
     expect(settings.preferManualCaptions).toBe(false);
     expect(settings.expireCaptionCacheAfterWeek).toBe(true);
@@ -148,13 +148,17 @@ describe('settings schema', () => {
     expect(settings.minSpeed).toBeLessThan(settings.maxSpeed);
   });
 
-  it('migrates the old 0.3s min-chunk default without touching a custom value', () => {
-    const migrated = migrateSettings({ version: 1, minChunkSec: 0.3 });
-    expect(migrated.minChunkSec).toBe(0.15);
+  it('migrates old min-chunk defaults without touching a custom value', () => {
+    const fromV1 = migrateSettings({ version: 1, minChunkSec: 0.3 });
+    expect(fromV1.minChunkSec).toBe(0.1);
+    const fromV2 = migrateSettings({ version: 2, minChunkSec: 0.15 });
+    expect(fromV2.minChunkSec).toBe(0.1);
     const custom = migrateSettings({ version: 1, minChunkSec: 0.5 });
     expect(custom.minChunkSec).toBe(0.5);
-    const kept = migrateSettings({ version: 2, minChunkSec: 0.3 });
-    expect(kept.minChunkSec).toBe(0.3);
+    const keptV2 = migrateSettings({ version: 2, minChunkSec: 0.3 });
+    expect(keptV2.minChunkSec).toBe(0.3);
+    const keptV3 = migrateSettings({ version: 3, minChunkSec: 0.15 });
+    expect(keptV3.minChunkSec).toBe(0.15);
   });
 
   it('rejects inverted speeds by repairing them', () => {

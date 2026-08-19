@@ -136,7 +136,7 @@ export const SETTINGS_HELP = {
     label: 'About minimum caption chunk',
     body: [
       'Caption words shorter than this are merged with their neighbors before WPM is computed. Auto-captions sometimes emit crumbs only tens of milliseconds long that would look like impossibly fast speech.',
-      'The default is 0.15s, a bit under a typical spoken word (about 0.20–0.25s) so real words stay separate. 0.3s is long enough to glue two or three ordinary words into one sample and hide pace changes. Raise it if a track is very choppy; lower it toward 0.10s to follow word timings more closely.',
+      'The default is 0.10s, short enough that typical spoken words (about 0.20–0.25s) stay separate so pace changes are not hidden. 0.3s is long enough to glue two or three ordinary words into one sample. Raise it if a track is very choppy; the slider floor is 0.10s.',
       'This does not change what you see on screen as subtitles; it only changes the timeline DynamicSpeed uses internally.',
     ],
   },

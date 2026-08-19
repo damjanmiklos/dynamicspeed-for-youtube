@@ -24,8 +24,30 @@ export const CAPTIONS_OFF_STATE: SavedCaptionState = {
 };
 
 const FLASH_STYLE_ID = 'ds-hide-caption-flash';
+const PLAYER_FLASH_STYLE_ID = 'ds-hide-caption-flash-player';
 const HIDE_CAPTIONS_ATTR = 'data-ds-hide-captions';
+const STAMP_ATTR = 'data-ds-caption-hide';
 const USER_CAPTION_PREF_KEY = 'ds.user-captions-wanted';
+const CAPTION_HIDE_SELECTOR = [
+  '.ytp-caption-window-container',
+  '.caption-window',
+  '[id^="caption-window"]',
+  '.ytp-caption-segment',
+  '.captions-text',
+  '.caption-visual-line',
+  '.ytp-caption-window-rollup',
+  '.ytp-caption-window-bottom',
+].join(',');
+const CAPTION_CONTAINER_SELECTOR =
+  '.ytp-caption-window-container, .caption-window, [id^="caption-window"]';
+
+type CaptionHideWatch = {
+  observer: MutationObserver;
+  onModeChange: () => void;
+};
+
+const captionHideWatches = new WeakMap<Document, CaptionHideWatch>();
+const captionHideApplying = new WeakSet<Document>();
 const CAPTION_STORAGE_KEYS = [
   'yt-player-caption-display-mode',
   'yt-player-sticky-caption',
@@ -204,39 +226,182 @@ export function restoreCaptionStorage(snapshot: Record<string, string | null>): 
   }
 }
 
-export function hideCaptionFlash(root: Document): void {
-  root.documentElement.setAttribute(HIDE_CAPTIONS_ATTR, '');
-  if (root.getElementById(FLASH_STYLE_ID)) {
+function hideCaptionCss(): string {
+  const leaves = CAPTION_HIDE_SELECTOR.split(',').map((item) => item.trim());
+  // Extra player-mode prefixes beat YouTube’s fullscreen/cinema rules, which
+  // add .ytp-fullscreen / .ytp-big-mode and set visibility:visible !important.
+  const prefixes = [
+    '',
+    ' #movie_player',
+    ' #movie_player.ytp-fullscreen',
+    ' #movie_player.ytp-big-mode',
+    ' .html5-video-player',
+    ' .html5-video-player.ytp-fullscreen',
+    ' .html5-video-player.ytp-big-mode',
+    ' :fullscreen',
+    ' :-webkit-full-screen',
+    ' ytd-watch-flexy[theater]',
+    ' ytd-watch-flexy[fullscreen]',
+    ' #player-theater-container',
+  ];
+  const selectors: string[] = [];
+  for (const prefix of prefixes) {
+    for (const leaf of leaves) {
+      selectors.push(`html[${HIDE_CAPTIONS_ATTR}]${prefix} ${leaf}`);
+      selectors.push(`html[${HIDE_CAPTIONS_ATTR}]${prefix} ${leaf} *`);
+    }
+  }
+  const hide = 'opacity:0!important;visibility:hidden!important;pointer-events:none!important;clip-path:inset(50%)!important;';
+  const containers = [
+    `html[${HIDE_CAPTIONS_ATTR}] #movie_player .ytp-caption-window-container`,
+    `html[${HIDE_CAPTIONS_ATTR}] #movie_player.ytp-fullscreen .ytp-caption-window-container`,
+    `html[${HIDE_CAPTIONS_ATTR}] #movie_player.ytp-big-mode .ytp-caption-window-container`,
+    `html[${HIDE_CAPTIONS_ATTR}] .html5-video-player.ytp-fullscreen .ytp-caption-window-container`,
+    `html[${HIDE_CAPTIONS_ATTR}] .html5-video-player.ytp-big-mode .ytp-caption-window-container`,
+    `html[${HIDE_CAPTIONS_ATTR}] :fullscreen .ytp-caption-window-container`,
+    `html[${HIDE_CAPTIONS_ATTR}] :-webkit-full-screen .ytp-caption-window-container`,
+  ];
+  return `${selectors.join(',')}{${hide}}${containers.join(',')}{${hide}display:none!important;}`;
+}
+
+function stampCaptionNode(node: HTMLElement): void {
+  if (
+    node.getAttribute(STAMP_ATTR) === '' &&
+    node.style.getPropertyValue('opacity') === '0' &&
+    node.style.getPropertyPriority('opacity') === 'important'
+  ) {
+    return;
+  }
+  node.setAttribute(STAMP_ATTR, '');
+  node.style.setProperty('opacity', '0', 'important');
+  node.style.setProperty('visibility', 'hidden', 'important');
+  node.style.setProperty('pointer-events', 'none', 'important');
+  node.style.setProperty('clip-path', 'inset(50%)', 'important');
+  if (node.matches(CAPTION_CONTAINER_SELECTOR)) {
+    node.style.setProperty('display', 'none', 'important');
+  }
+}
+
+function unstampCaptionNode(node: HTMLElement): void {
+  if (!node.hasAttribute(STAMP_ATTR)) {
+    return;
+  }
+  node.removeAttribute(STAMP_ATTR);
+  node.style.removeProperty('opacity');
+  node.style.removeProperty('visibility');
+  node.style.removeProperty('pointer-events');
+  node.style.removeProperty('clip-path');
+  node.style.removeProperty('display');
+}
+
+function applyCaptionHide(root: Document): void {
+  if (captionHideApplying.has(root)) {
+    return;
+  }
+  captionHideApplying.add(root);
+  try {
+    for (const node of root.querySelectorAll(CAPTION_HIDE_SELECTOR)) {
+      if (node instanceof HTMLElement) {
+        stampCaptionNode(node);
+      }
+    }
+  } finally {
+    captionHideApplying.delete(root);
+  }
+}
+
+function clearCaptionHideStamps(root: Document): void {
+  for (const node of root.querySelectorAll(`[${STAMP_ATTR}]`)) {
+    if (node instanceof HTMLElement) {
+      unstampCaptionNode(node);
+    }
+  }
+}
+
+function ensureDocumentHideStyle(root: Document): void {
+  let style = root.getElementById(FLASH_STYLE_ID);
+  if (!(style instanceof HTMLStyleElement)) {
+    style = root.createElement('style');
+    style.id = FLASH_STYLE_ID;
+    (root.head ?? root.documentElement).appendChild(style);
+  }
+  style.textContent = hideCaptionCss();
+}
+
+function ensurePlayerHideStyle(root: Document): void {
+  const player = root.querySelector('#movie_player, .html5-video-player');
+  if (!(player instanceof HTMLElement)) {
+    return;
+  }
+  if (player.querySelector(`#${PLAYER_FLASH_STYLE_ID}`)) {
     return;
   }
   const style = root.createElement('style');
-  style.id = FLASH_STYLE_ID;
-  // Keep the overlay off-screen until CC is restored. clip-path still hides
-  // if YouTube later sets opacity without !important. The CC button still
-  // goes “on”; that is the control, not the caption text.
-  style.textContent = `
-html[${HIDE_CAPTIONS_ATTR}] .ytp-caption-window-container,
-html[${HIDE_CAPTIONS_ATTR}] .ytp-caption-window-container *,
-html[${HIDE_CAPTIONS_ATTR}] .caption-window,
-html[${HIDE_CAPTIONS_ATTR}] .caption-window *,
-html[${HIDE_CAPTIONS_ATTR}] [id^="caption-window"],
-html[${HIDE_CAPTIONS_ATTR}] .ytp-caption-segment,
-html[${HIDE_CAPTIONS_ATTR}] .captions-text,
-html[${HIDE_CAPTIONS_ATTR}] .caption-visual-line,
-html[${HIDE_CAPTIONS_ATTR}] .ytp-caption-window-rollup,
-html[${HIDE_CAPTIONS_ATTR}] .ytp-caption-window-bottom {
-  opacity: 0 !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-  clip-path: inset(50%) !important;
+  style.id = PLAYER_FLASH_STYLE_ID;
+  style.textContent = hideCaptionCss();
+  player.prepend(style);
 }
-`.trim();
-  root.documentElement.appendChild(style);
+
+function startCaptionHideWatch(root: Document): void {
+  if (captionHideWatches.has(root)) {
+    return;
+  }
+  const onModeChange = () => {
+    if (captionHideApplying.has(root)) {
+      return;
+    }
+    ensurePlayerHideStyle(root);
+    applyCaptionHide(root);
+  };
+  const observer = new MutationObserver((records) => {
+    const relevant = records.some((record) => {
+      const target = record.target;
+      return !(
+        target instanceof Element &&
+        (target.id === FLASH_STYLE_ID || target.id === PLAYER_FLASH_STYLE_ID)
+      );
+    });
+    if (!relevant) {
+      return;
+    }
+    onModeChange();
+  });
+  observer.observe(root.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['class', 'style', 'hidden', 'theater', 'fullscreen'],
+  });
+  root.addEventListener('fullscreenchange', onModeChange);
+  root.addEventListener('webkitfullscreenchange', onModeChange);
+  captionHideWatches.set(root, { observer, onModeChange });
+}
+
+function stopCaptionHideWatch(root: Document): void {
+  const watch = captionHideWatches.get(root);
+  if (!watch) {
+    return;
+  }
+  watch.observer.disconnect();
+  root.removeEventListener('fullscreenchange', watch.onModeChange);
+  root.removeEventListener('webkitfullscreenchange', watch.onModeChange);
+  captionHideWatches.delete(root);
+}
+
+export function hideCaptionFlash(root: Document): void {
+  root.documentElement.setAttribute(HIDE_CAPTIONS_ATTR, '');
+  ensureDocumentHideStyle(root);
+  ensurePlayerHideStyle(root);
+  startCaptionHideWatch(root);
+  applyCaptionHide(root);
 }
 
 export function showCaptionFlash(root: Document): void {
+  stopCaptionHideWatch(root);
+  clearCaptionHideStamps(root);
   root.documentElement.removeAttribute(HIDE_CAPTIONS_ATTR);
   root.getElementById(FLASH_STYLE_ID)?.remove();
+  root.getElementById(PLAYER_FLASH_STYLE_ID)?.remove();
 }
 
 export async function enableCaptionsForCapture(

@@ -169,9 +169,62 @@ describe('caption nudge helpers', () => {
     hideCaptionFlash(document);
     expect(document.getElementById('ds-hide-caption-flash')).toBeTruthy();
     expect(document.documentElement.hasAttribute('data-ds-hide-captions')).toBe(true);
+    const css = document.getElementById('ds-hide-caption-flash')?.textContent ?? '';
+    expect(css).toContain('ytp-fullscreen');
+    expect(css).toContain('ytp-big-mode');
     showCaptionFlash(document);
     expect(document.getElementById('ds-hide-caption-flash')).toBeNull();
     expect(document.documentElement.hasAttribute('data-ds-hide-captions')).toBe(false);
+  });
+
+  it('stamps caption overlay nodes so fullscreen CSS cannot unhide them', () => {
+    document.body.innerHTML = `
+      <div id="movie_player" class="html5-video-player">
+        <div class="ytp-caption-window-container"><span class="captions-text">hi</span></div>
+      </div>
+    `;
+    hideCaptionFlash(document);
+    const overlay = document.querySelector('.ytp-caption-window-container') as HTMLElement;
+    expect(overlay.hasAttribute('data-ds-caption-hide')).toBe(true);
+    expect(overlay.style.getPropertyValue('opacity')).toBe('0');
+    expect(overlay.style.getPropertyPriority('opacity')).toBe('important');
+    expect(overlay.style.getPropertyValue('display')).toBe('none');
+    expect(document.getElementById('ds-hide-caption-flash-player')).toBeTruthy();
+    showCaptionFlash(document);
+    expect(overlay.hasAttribute('data-ds-caption-hide')).toBe(false);
+    expect(overlay.style.getPropertyValue('opacity')).toBe('');
+  });
+
+  it('re-stamps captions after a cinema/fullscreen class change', async () => {
+    document.body.innerHTML = `
+      <div id="movie_player" class="html5-video-player">
+        <div class="ytp-caption-window-container"></div>
+      </div>
+    `;
+    hideCaptionFlash(document);
+    const player = document.getElementById('movie_player') as HTMLElement;
+    const overlay = document.querySelector('.ytp-caption-window-container') as HTMLElement;
+    overlay.style.setProperty('opacity', '1', 'important');
+    overlay.style.setProperty('visibility', 'visible', 'important');
+    overlay.removeAttribute('data-ds-caption-hide');
+    player.classList.add('ytp-fullscreen', 'ytp-big-mode');
+    await vi.waitFor(() => {
+      expect(overlay.style.getPropertyValue('opacity')).toBe('0');
+      expect(overlay.hasAttribute('data-ds-caption-hide')).toBe(true);
+    });
+    showCaptionFlash(document);
+  });
+
+  it('hides caption windows created after the hide style is installed', async () => {
+    document.body.innerHTML = `<div id="movie_player" class="html5-video-player"></div>`;
+    hideCaptionFlash(document);
+    const overlay = document.createElement('div');
+    overlay.className = 'ytp-caption-window-container';
+    document.getElementById('movie_player')?.appendChild(overlay);
+    await vi.waitFor(() => {
+      expect(overlay.hasAttribute('data-ds-caption-hide')).toBe(true);
+    });
+    showCaptionFlash(document);
   });
 
   it('keeps the hide style until captions are actually turned off', async () => {

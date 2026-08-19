@@ -136,16 +136,17 @@ export function OptionsApp() {
               </button>
             ))}
           </nav>
-          <div className="mt-auto space-y-3 pt-8">
-            <ReportBugLink />
+          <div className="mt-4">
             <SupportLink />
+          </div>
+          <div className="mt-auto pt-8">
+            <ReportBugLink />
           </div>
         </aside>
 
         <main className="min-w-0 flex-1 px-5 py-8 md:px-10">
           <div className="mb-6 md:hidden">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="flex gap-2 overflow-auto">
+            <div className="mb-3 flex gap-2 overflow-auto">
               {NAV.map((item) => (
                 <button
                   key={item.id}
@@ -157,8 +158,9 @@ export function OptionsApp() {
                   {item.label}
                 </button>
               ))}
-              </div>
-              <SupportLink compact />
+            </div>
+            <div className="mb-3">
+              <SupportLink />
             </div>
             <ReportBugLink />
           </div>
@@ -818,9 +820,6 @@ export function OptionsApp() {
                   />
                 </div>
               </Row>
-              <div className="mt-8">
-                <SupportLink />
-              </div>
             </section>
           )}
         </main>

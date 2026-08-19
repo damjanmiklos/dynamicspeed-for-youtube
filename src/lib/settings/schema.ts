@@ -76,5 +76,6 @@ export type ChannelOverride = z.infer<typeof ChannelOverrideSchema>;
 export type DynamicSpeedSettings = z.infer<typeof DynamicSpeedSettingsSchema>;
 
 export const SETTINGS_STORAGE_KEY = 'ds.settings';
-export const TRANSCRIPT_CACHE_KEY = 'ds.transcriptCache.v3';
+/** Bump when parsed token timings change so stale caption caches are dropped. */
+export const TRANSCRIPT_CACHE_KEY = 'ds.transcriptCache.v4';
 export const SETTINGS_VERSION = 4;

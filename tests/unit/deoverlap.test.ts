@@ -23,15 +23,21 @@ function speech(
   };
 }
 
-function cue(t0: number, t1: number, words: string[], rawText = words.join(' ')): TimedCue {
+function cue(
+  t0: number,
+  t1: number,
+  words: string[],
+  rawText = words.join(' '),
+  timed = true,
+): TimedCue {
   return {
     t0,
     t1,
     rawText,
     words: words.map((text, index) => ({
       text,
-      t0: t0 + index * 0.2,
-      hasOffset: true,
+      t0: timed ? t0 + index * 0.2 : undefined,
+      hasOffset: timed,
     })),
   };
 }
@@ -84,6 +90,46 @@ describe('stripRollingCueDuplicates', () => {
       'you',
       'doing',
     ]);
+  });
+
+  it('gives untimed leftover words the appearance window, not the display hold', () => {
+    const cues = [
+      cue(0, 4, ['hello', 'world', 'how', 'are', 'you'], undefined, false),
+      cue(2, 6, ['how', 'are', 'you', 'doing', 'today'], undefined, false),
+    ];
+    stripRollingCueDuplicates(cues);
+    expect(cues[1].words.map((word) => word.text)).toEqual(['doing', 'today']);
+    expect(cues[0].t0).toBeCloseTo(0, 8);
+    expect(cues[0].t1).toBeCloseTo(2, 8);
+    expect(cues[1].t0).toBeCloseTo(2, 8);
+    expect(cues[1].t1).toBeCloseTo(4, 8);
+  });
+
+  it('still tightens a three-cue untimed roll after earlier ends have been snapped', () => {
+    const cues = [
+      cue(0, 4, ['hello', 'world', 'how', 'are', 'you'], undefined, false),
+      cue(2, 6, ['how', 'are', 'you', 'doing', 'today'], undefined, false),
+      cue(4, 8, ['doing', 'today', 'folks'], undefined, false),
+    ];
+    stripRollingCueDuplicates(cues);
+    expect(cues[0].t1).toBeCloseTo(2, 8);
+    expect(cues[1].words.map((word) => word.text)).toEqual(['doing', 'today']);
+    expect(cues[1].t0).toBeCloseTo(2, 8);
+    expect(cues[1].t1).toBeCloseTo(4, 8);
+    expect(cues[2].words.map((word) => word.text)).toEqual(['folks']);
+    expect(cues[2].t0).toBeCloseTo(4, 8);
+    expect(cues[2].t1).toBeCloseTo(6, 8);
+  });
+
+  it('does not move timed leftover words; ASR offsets already own the tail', () => {
+    const cues = [
+      cue(0, 4, ['hello', 'world', 'how', 'are', 'you']),
+      cue(2, 6, ['how', 'are', 'you', 'doing', 'today']),
+    ];
+    stripRollingCueDuplicates(cues);
+    expect(cues[0].t1).toBeCloseTo(4, 8);
+    expect(cues[1].t0).toBeCloseTo(2, 8);
+    expect(cues[1].t1).toBeCloseTo(6, 8);
   });
 });
 

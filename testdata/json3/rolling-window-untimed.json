@@ -1,0 +1,14 @@
+{
+  "events": [
+    {
+      "tStartMs": 0,
+      "dDurationMs": 4000,
+      "segs": [{ "utf8": "hello world how are you" }]
+    },
+    {
+      "tStartMs": 2000,
+      "dDurationMs": 4000,
+      "segs": [{ "utf8": "how are you doing today" }]
+    }
+  ]
+}

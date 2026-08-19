@@ -15,6 +15,17 @@ function isMetaCue(cue: TimedCue): boolean {
   return isMetaText(cue.rawText);
 }
 
+function cueIsUntimed(cue: TimedCue): boolean {
+  return cue.words.every((word) => !word.hasOffset);
+}
+
+function snapCueEnd(cue: TimedCue, end: number): void {
+  const minSpan = MIN_DURATION_SEC * Math.max(cue.words.length, 1);
+  if (end - cue.t0 >= minSpan) {
+    cue.t1 = Math.min(cue.t1, end);
+  }
+}
+
 function letterCount(keys: string[], start: number, count: number): number {
   let letters = 0;
   for (let i = 0; i < count; i += 1) {
@@ -52,6 +63,10 @@ export function stripRollingCueDuplicates(cues: TimedCue[]): void {
   const keys: string[][] = cues.map((cue) =>
     cue.words.map((word) => cueWordKey(word.text)),
   );
+  // Overlap tests must use the original display windows. Shrinking t1 as we
+  // go would hide later rolling events that start at the previous original end.
+  const origT0 = cues.map((cue) => cue.t0);
+  const origT1 = cues.map((cue) => cue.t1);
 
   for (let i = 0; i < cues.length; i += 1) {
     const current = cues[i];
@@ -61,13 +76,13 @@ export function stripRollingCueDuplicates(cues: TimedCue[]): void {
     const limit = Math.min(cues.length, i + 1 + ROLLING_LOOKAHEAD);
     for (let j = i + 1; j < limit; j += 1) {
       const later = cues[j];
-      if (later.t0 >= current.t1) {
+      if (origT0[j] >= origT1[i]) {
         break;
       }
       if (isMetaCue(later) || later.words.length === 0) {
         continue;
       }
-      if (current.t1 - later.t0 < MIN_OVERLAP_SEC) {
+      if (origT1[i] - origT0[j] < MIN_OVERLAP_SEC) {
         continue;
       }
       const overlap = rollingOverlapLength(keys[i], keys[j]);
@@ -76,6 +91,23 @@ export function stripRollingCueDuplicates(cues: TimedCue[]): void {
       }
       later.words = later.words.slice(overlap);
       keys[j] = keys[j].slice(overlap);
+
+      // Untimed rolling windows are display holds, not word timings. After the
+      // repeated prefix is dropped, leftover words were spoken when they
+      // appeared (later.t0), and the previous line ended when this one appeared.
+      // Painting leftovers across the full original span (or shifting them into
+      // the hold after current.t1) underestimates WPM and speeds the video up.
+      const currentUntimed = cueIsUntimed(current);
+      const laterUntimed = cueIsUntimed(later);
+      if (currentUntimed) {
+        snapCueEnd(current, origT0[j]);
+      }
+      if (later.words.length === 0) {
+        continue;
+      }
+      if (laterUntimed) {
+        snapCueEnd(later, origT1[i]);
+      }
     }
   }
 }

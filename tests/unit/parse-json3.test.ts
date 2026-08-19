@@ -88,6 +88,30 @@ describe('parseJson3', () => {
     ]);
   });
 
+  it('does not stretch untimed unique words across a rolling cue window', () => {
+    const json = JSON.parse(
+      readFileSync(join(dir, 'rolling-window-untimed.json'), 'utf8'),
+    );
+    const tokens = parseJson3(json, { syllableWeighting: false });
+    expect(tokens.map((token) => token.text)).toEqual([
+      'hello',
+      'world',
+      'how',
+      'are',
+      'you',
+      'doing',
+      'today',
+    ]);
+    expect(tokens[0]?.t0).toBeCloseTo(0, 5);
+    expect(tokens[4]?.text).toBe('you');
+    expect(tokens[4]?.t1).toBeCloseTo(2, 5);
+    const doing = tokens.find((token) => token.text === 'doing');
+    const today = tokens.find((token) => token.text === 'today');
+    expect(doing?.t0).toBeCloseTo(2, 5);
+    expect(today?.t1).toBeCloseTo(4, 5);
+    expect((today?.t1 ?? 0) - (doing?.t0 ?? 0)).toBeCloseTo(2, 5);
+  });
+
   it('keeps distinct overlapping lines but makes their times sequential', () => {
     const json = JSON.parse(readFileSync(join(dir, 'interleaved-lines.json'), 'utf8'));
     const tokens = parseJson3(json, { syllableWeighting: false }).filter(

@@ -80,7 +80,7 @@ export const SETTINGS_HELP = {
     label: 'About syllable-weighted WPM',
     body: [
       'When this is on, spoken pace is estimated from syllables rather than treating every caption word as equal. A word like “internationalization” counts more than “cat,” so dense speech is recognized as faster talking.',
-      'That usually slows the video a bit on technical or formal speech and speeds it less aggressively on very short, simple words. Syllables are counted locally (no network). A constant scale for this toggle is then divided out so Target WPM still reads as ordinary words per minute.',
+      'That usually slows the video a bit on technical or formal speech and speeds it less aggressively on very short, simple words. Syllables are counted locally (no network). A constant scale (about 4.5% on typical English captions, from mean syllables per word ÷ 1.5) is then divided out so Target WPM still reads as ordinary words per minute.',
       'Turn it off if you want a simpler words-per-minute model that matches how many caption tokens appear per second.',
     ],
   },
@@ -145,6 +145,7 @@ export const SETTINGS_HELP = {
     body: [
       'When this is off, a long gap in speech is not treated as “the speaker is slow.” Speed eases between the speech on either side of the gap (PCHIP), so a pause does not slam the rate around.',
       'When this is on, gaps longer than Long pause — and optional [Music]/[Applause]-style tags — target your Maximum speed so visual-only stretches and long silences skip faster. The slew limit still caps how quickly playback climbs to that max.',
+      'Before speech resumes, speed eases down from that max so the first words are not still at the cap. How early that ease starts follows the Feel slew limit (faster Feel → later, shorter ease).',
       'Leave it off for interviews and talks where silence is part of the delivery. Turn it on for video essays and explainers that pad with b-roll.',
     ],
   },

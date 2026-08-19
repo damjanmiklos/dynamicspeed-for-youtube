@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSpeedCurve,
   mergeShortChunks,
+  pauseApproachLeadSec,
   rateAt,
   type CurveBuildOptions,
 } from '../../src/lib/pacing/curve';
@@ -129,7 +130,7 @@ describe('speed curve', () => {
         longPauseSec: 1.8,
       }),
     );
-    expect(rateAt(curve, 2.8)).toBeGreaterThan(2.2);
+    expect(rateAt(curve, 2.25)).toBeGreaterThan(2.2);
   });
 
   it('builds a multi-hour-length token stream quickly', () => {
@@ -203,6 +204,38 @@ describe('speed curve', () => {
       options({ bRollAcceleration: true, maxSpeed: 3, spokenDutyStrength: 0.5 }),
     );
     expect(rateAt(curve, 5)).toBeGreaterThan(2.2);
+  });
+
+  it('eases off max speed before speech resumes when b-roll is on', () => {
+    const opts = options({
+      bRollAcceleration: true,
+      maxSpeed: 3,
+      syllableWeighting: false,
+      jargonCompensation: 1,
+      spokenDutyStrength: 0,
+      gaussianSigma: 1,
+      medianWindowSec: 1,
+      slewRateLimit: 0.4,
+      targetWpm: 180,
+    });
+    const tokens = [token(0, 0.5, 'hello'), token(10, 10.5, 'later')];
+    const curve = buildSpeedCurve(tokens, opts);
+    const speechRate = rateAt(curve, 10.25);
+    expect(rateAt(curve, 1.2)).toBeGreaterThan(2.6);
+    expect(rateAt(curve, 5)).toBeGreaterThan(2.6);
+    expect(rateAt(curve, 10)).toBeLessThan(2.05);
+    expect(rateAt(curve, 10)).toBeLessThanOrEqual(speechRate + 0.12);
+    expect(speechRate).toBeLessThan(2);
+  });
+});
+
+describe('pause approach lead', () => {
+  it('matches video-time slew and leaves a short hold at max', () => {
+    expect(pauseApproachLeadSec(10, 3, 1.5, 0.4)).toBeCloseTo((1.5 / 0.4) * 1.15, 8);
+    expect(pauseApproachLeadSec(2, 3, 1.2, 0.4)).toBeLessThan(2);
+    expect(pauseApproachLeadSec(2, 3, 1.2, 0.4)).toBeGreaterThan(1.4);
+    expect(pauseApproachLeadSec(0, 3, 1, 0.4)).toBe(0);
+    expect(pauseApproachLeadSec(5, 1.5, 1.5, 0.4)).toBe(0);
   });
 });
 

@@ -23,6 +23,23 @@ export function slewStep(
   return current + Math.sign(delta) * maxDelta;
 }
 
+/**
+ * Slowing down from 3× has little wall-clock time per second of video.
+ * Scale the downward slew by the current rate so a video-time lead of
+ * |Δrate| / baseLimit can finish before speech resumes.
+ */
+export function slewLimitForStep(
+  current: number,
+  target: number,
+  baseLimitPerSec: number,
+): number {
+  const base = Math.max(0, Number.isFinite(baseLimitPerSec) ? baseLimitPerSec : 0);
+  if (!(target < current) || !Number.isFinite(current)) {
+    return base;
+  }
+  return base * Math.max(current, 1);
+}
+
 export const RATE_JUMP_EPSILON = 0.08;
 
 /**

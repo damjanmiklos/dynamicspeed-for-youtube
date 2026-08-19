@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pchipEvaluate, pchipSlopes } from '../../src/lib/pacing/pchip';
-import { introRate, isSeekJump, slewStep } from '../../src/lib/pacing/slew';
+import { introRate, isSeekJump, slewLimitForStep, slewStep } from '../../src/lib/pacing/slew';
 import { isExternalRateChange } from '../../src/lib/youtube/playback';
 import { resolveDynamics } from '../../src/lib/pacing/feel';
 import { mapWpmToRate } from '../../src/lib/pacing/curve';
@@ -31,6 +31,12 @@ describe('slew', () => {
 
   it('snaps when the delta fits in the window', () => {
     expect(slewStep(1, 1.1, 1, 0.5)).toBeCloseTo(1.1, 8);
+  });
+
+  it('scales downward slew with the current rate so 3× can slow in video time', () => {
+    expect(slewLimitForStep(3, 1.2, 0.4)).toBeCloseTo(1.2, 8);
+    expect(slewLimitForStep(1, 2, 0.4)).toBeCloseTo(0.4, 8);
+    expect(slewLimitForStep(0.8, 0.75, 0.4)).toBeCloseTo(0.4, 8);
   });
 });
 

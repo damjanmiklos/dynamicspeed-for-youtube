@@ -218,6 +218,57 @@ function addKnot(
   values.push(value);
 }
 
+/**
+ * Video seconds to leave max speed before speech resumes.
+ * Matches a downward slew of `slewRateLimit` per second of *video* time
+ * (wall-clock slew is scaled by the current rate in the controller).
+ */
+export function pauseApproachLeadSec(
+  gapSec: number,
+  fromRate: number,
+  toRate: number,
+  slewRateLimit: number,
+): number {
+  const gap = Math.max(finite(gapSec, 0), 0);
+  const from = Math.max(finite(fromRate, 1), 0.05);
+  const to = Math.max(finite(toRate, 1), 0.05);
+  const delta = Math.abs(from - to);
+  if (gap <= 0 || delta < 1e-4) {
+    return 0;
+  }
+  const slew = Math.max(finite(slewRateLimit, 0.3), 0.05);
+  const exact = (delta / slew) * 1.15;
+  const hold = Math.min(0.35, gap * 0.15);
+  return Math.min(exact, Math.max(0, gap - hold));
+}
+
+function addBRollGapKnots(
+  knotT: number[],
+  knotR: number[],
+  gapStart: number,
+  gapEnd: number,
+  resumeRate: number,
+  maxSpeed: number,
+  slewRateLimit: number,
+): void {
+  const gap = gapEnd - gapStart;
+  if (!(gap > 0)) {
+    return;
+  }
+  addKnot(knotT, knotR, gapStart <= 0 ? 0 : gapStart + 1e-3, maxSpeed);
+  const lead = pauseApproachLeadSec(gap, maxSpeed, resumeRate, slewRateLimit);
+  const approachStart = gapEnd - lead;
+  if (approachStart > gapStart + 2e-3) {
+    addKnot(knotT, knotR, approachStart, maxSpeed);
+  }
+  const arriveEarly = Math.min(0.1, lead * 0.2);
+  const arriveAt = Math.max(gapStart + 2e-3, gapEnd - arriveEarly);
+  addKnot(knotT, knotR, arriveAt, resumeRate);
+  if (gapEnd > arriveAt + 1e-4) {
+    addKnot(knotT, knotR, gapEnd, resumeRate);
+  }
+}
+
 export function emptyCurve(duration = 1): SpeedCurve {
   return {
     duration: Math.max(duration, 0),
@@ -300,8 +351,15 @@ export function buildSpeedCurve(
 
   const leadingGap = first.t0;
   if (leadingGap > options.longPauseSec && options.bRollAcceleration) {
-    addKnot(knotT, knotR, 0, options.maxSpeed);
-    addKnot(knotT, knotR, Math.max(0, first.t0 - 1e-3), options.maxSpeed);
+    addBRollGapKnots(
+      knotT,
+      knotR,
+      0,
+      first.t0,
+      firstRate,
+      options.maxSpeed,
+      options.slewRateLimit,
+    );
   } else {
     addKnot(knotT, knotR, 0, firstRate);
   }
@@ -331,10 +389,21 @@ export function buildSpeedCurve(
       scanMusic && musicCoversGap(music, musicIndex, chunk.t1, next.t0);
     const isPause = gap > options.longPauseSec || musicHit;
     if (isPause && options.bRollAcceleration) {
-      const mid = (chunk.t1 + next.t0) / 2;
-      addKnot(knotT, knotR, chunk.t1 + 1e-3, options.maxSpeed);
-      addKnot(knotT, knotR, mid, options.maxSpeed);
-      addKnot(knotT, knotR, Math.max(mid, next.t0 - 1e-3), options.maxSpeed);
+      const nextRate = mapWpmToRate(
+        next.wpm,
+        options.targetWpm,
+        options.minSpeed,
+        options.maxSpeed,
+      );
+      addBRollGapKnots(
+        knotT,
+        knotR,
+        chunk.t1,
+        next.t0,
+        nextRate,
+        options.maxSpeed,
+        options.slewRateLimit,
+      );
     }
   }
 

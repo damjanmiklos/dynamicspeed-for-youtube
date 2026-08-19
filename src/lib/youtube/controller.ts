@@ -4,6 +4,7 @@ import {
   introRate,
   isSeekJump,
   rateAt,
+  slewLimitForStep,
   slewStep,
   wpmAt,
   type SpeedCurve,
@@ -249,7 +250,12 @@ export function createPlaybackController(hooks: ControllerHooks) {
         applied = desired;
       }
     } else {
-      applied = slewStep(applied, desired, dt, current.slewRateLimit);
+      applied = slewStep(
+        applied,
+        desired,
+        dt,
+        slewLimitForStep(applied, desired, current.slewRateLimit),
+      );
     }
 
     ownRate(applied);

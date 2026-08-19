@@ -1,14 +1,19 @@
 import { clamp } from './feel';
 
 /**
- * Fitted on exported YouTube transcripts (scratch/dynamicspeed-transcript-*.json):
- * geometric mean of duration-weighted chunk WPM vs raw word WPM.
+ * Fitted on exported YouTube transcripts (scratch/dynamicspeed-transcript-*.json).
+ *
+ * Syllable weighting: pooled E[syllables] / 1.5 across speech tokens (word-equal,
+ * jackknife SE ≈ 0.024). Not duration-weighted syllables — that would double-count
+ * long words. Chunk WPM ratios are noisier because of merging and WPM clamps.
+ *
+ * Jargon / spoken-duty: geometric mean of duration-weighted chunk WPM vs raw.
  *
  * These are functions of the *settings*, not of the current video, so relative
  * effects of each tool stay intact and Target WPM can stay in ordinary
  * words-per-minute units.
  */
-export const SYLLABLE_WEIGHTING_CALIBRATION = 1.032;
+export const SYLLABLE_WEIGHTING_CALIBRATION = 1.045;
 /** Share of effective-word mass that is jargon, so C(j) = 1 + (j − 1) × share. */
 export const JARGON_WEIGHT_SHARE = 0.033;
 /** Typical voiced fraction of caption-covered speech (not long pauses). */

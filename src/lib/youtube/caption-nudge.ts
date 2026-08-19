@@ -53,6 +53,9 @@ const CAPTION_STORAGE_KEYS = [
   'yt-player-sticky-caption',
   'yt-player-caption-sticky-language',
 ] as const;
+/** Extra off-clicks after unload; YouTube often turns CC back on once timedtext arrives. */
+const CAPTIONS_OFF_SETTLE_ROUNDS = 12;
+const CAPTIONS_OFF_SETTLE_GAP_MS = 200;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -106,11 +109,19 @@ export function isSubtitlesButtonPressed(root: ParentNode): boolean {
 }
 
 export function captionWindowPresent(root: ParentNode): boolean {
-  return Boolean(
-    root.querySelector(
-      '.caption-window, .ytp-caption-segment, .captions-text, .ytp-caption-window-container .caption-window',
-    ),
+  const nodes = root.querySelectorAll(
+    '.caption-window, .ytp-caption-segment, .captions-text, .ytp-caption-window-container .caption-window',
   );
+  for (const node of nodes) {
+    if (!(node instanceof HTMLElement)) {
+      continue;
+    }
+    if (node.hasAttribute(STAMP_ATTR) || node.closest(`[${STAMP_ATTR}]`)) {
+      continue;
+    }
+    return true;
+  }
+  return false;
 }
 
 export function captionsLookEnabled(root: ParentNode): boolean {
@@ -223,6 +234,53 @@ export function restoreCaptionStorage(snapshot: Record<string, string | null>): 
     }
   } catch {
     // private mode
+  }
+}
+
+function youtubeStorageData(previous: string | null, data: string): string {
+  let expiration = Date.now() + 30 * 24 * 60 * 60 * 1000;
+  let rest: Record<string, unknown> = {};
+  if (previous) {
+    try {
+      const parsed = JSON.parse(previous) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object') {
+        rest = parsed;
+        if (typeof parsed.expiration === 'number') {
+          expiration = parsed.expiration;
+        }
+      }
+    } catch {
+      // not YouTube’s JSON envelope
+    }
+  }
+  return JSON.stringify({ ...rest, data, expiration, creation: Date.now() });
+}
+
+/** Force CC sticky-off. Restoring the pre-nudge snapshot can turn captions back on. */
+export function captionStorageOff(
+  snapshot?: Record<string, string | null>,
+): Record<string, string | null> {
+  const previous = snapshot ?? {};
+  return {
+    'yt-player-caption-display-mode': null,
+    'yt-player-sticky-caption': youtubeStorageData(
+      previous['yt-player-sticky-caption'] ?? null,
+      'false',
+    ),
+    'yt-player-caption-sticky-language': previous['yt-player-caption-sticky-language'] ?? null,
+  };
+}
+
+function setCaptionsTrackOff(player: CaptionPlayer | null): void {
+  try {
+    player?.setOption?.('captions', 'stickyCaptions', false);
+  } catch {
+    // option is not always present
+  }
+  try {
+    player?.setOption?.('captions', 'track', {});
+  } catch {
+    // continue with the button
   }
 }
 
@@ -436,13 +494,11 @@ async function disableCaptionsDisplay(
   player: CaptionPlayer | null,
   root: Document,
   sleep: (ms: number) => Promise<void>,
+  options?: { unload?: boolean },
 ): Promise<void> {
+  const unload = options?.unload !== false;
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      player?.setOption?.('captions', 'track', {});
-    } catch {
-      // continue with the button
-    }
+    setCaptionsTrackOff(player);
     if (isSubtitlesButtonPressed(root)) {
       clickSubtitlesButton(root);
     }
@@ -451,14 +507,33 @@ async function disableCaptionsDisplay(
       break;
     }
   }
-  try {
-    player?.unloadModule?.('captions');
-  } catch {
-    // last resort is another button click
+  if (unload) {
+    try {
+      player?.unloadModule?.('captions');
+    } catch {
+      // last resort is another button click
+    }
+    await sleep(80);
+    setCaptionsTrackOff(player);
+    if (isSubtitlesButtonPressed(root)) {
+      clickSubtitlesButton(root);
+    }
   }
-  await sleep(80);
-  if (isSubtitlesButtonPressed(root)) {
-    clickSubtitlesButton(root);
+}
+
+async function settleCaptionsOff(
+  player: CaptionPlayer | null,
+  root: Document,
+  sleep: (ms: number) => Promise<void>,
+  storageOff: Record<string, string | null>,
+): Promise<void> {
+  for (let round = 0; round < CAPTIONS_OFF_SETTLE_ROUNDS; round += 1) {
+    await sleep(CAPTIONS_OFF_SETTLE_GAP_MS);
+    restoreCaptionStorage(storageOff);
+    setCaptionsTrackOff(player);
+    if (isSubtitlesButtonPressed(root)) {
+      clickSubtitlesButton(root);
+    }
   }
 }
 
@@ -489,17 +564,17 @@ export async function restoreSavedCaptionState(
     return;
   }
 
+  const storageOff = captionStorageOff(storageSnapshot);
   try {
     await disableCaptionsDisplay(player, root, sleep);
-    if (storageSnapshot) {
-      restoreCaptionStorage(storageSnapshot);
-    }
-    await sleep(160);
+    restoreCaptionStorage(storageOff);
+    await settleCaptionsOff(player, root, sleep, storageOff);
     if (isSubtitlesButtonPressed(root) || captionWindowPresent(root)) {
-      await disableCaptionsDisplay(player, root, sleep);
-      if (storageSnapshot) {
-        restoreCaptionStorage(storageSnapshot);
-      }
+      await disableCaptionsDisplay(player, root, sleep, { unload: false });
+      restoreCaptionStorage(storageOff);
+    }
+    if (isSubtitlesButtonPressed(root)) {
+      clickSubtitlesButton(root);
     }
   } finally {
     showCaptionFlash(root);

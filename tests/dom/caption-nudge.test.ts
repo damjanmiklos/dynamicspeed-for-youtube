@@ -12,6 +12,7 @@ import {
   resolveCaptureCaptionPref,
   restoreSavedCaptionState,
   showCaptionFlash,
+  snapshotCaptionStorage,
   userWantedCaptionsOn,
   writeRememberedCaptionPref,
 } from '../../src/lib/youtube/caption-nudge';
@@ -225,6 +226,52 @@ describe('caption nudge helpers', () => {
       expect(overlay.hasAttribute('data-ds-caption-hide')).toBe(true);
     });
     showCaptionFlash(document);
+  });
+
+  it('turns CC back off if YouTube re-enables it after unload', async () => {
+    document.body.innerHTML = `
+      <button class="ytp-subtitles-button" aria-pressed="true"></button>
+    `;
+    const button = document.querySelector('.ytp-subtitles-button') as HTMLButtonElement;
+    button.addEventListener('click', () => {
+      button.setAttribute(
+        'aria-pressed',
+        button.getAttribute('aria-pressed') === 'true' ? 'false' : 'true',
+      );
+    });
+    let sleeps = 0;
+    await restoreSavedCaptionState(
+      { setOption: vi.fn(), unloadModule: vi.fn() },
+      document,
+      { buttonPressed: false, windowVisible: false, track: null },
+      async () => {
+        sleeps += 1;
+        if (sleeps === 8) {
+          button.setAttribute('aria-pressed', 'true');
+        }
+      },
+    );
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(sleeps).toBeGreaterThan(8);
+  });
+
+  it('writes sticky captions off instead of restoring a leftover on flag', async () => {
+    localStorage.setItem(
+      'yt-player-sticky-caption',
+      JSON.stringify({ data: 'true', expiration: 9, creation: 1 }),
+    );
+    const snapshot = snapshotCaptionStorage();
+    await restoreSavedCaptionState(
+      { setOption: vi.fn(), unloadModule: vi.fn() },
+      document,
+      { buttonPressed: false, windowVisible: false, track: null },
+      async () => undefined,
+      snapshot,
+    );
+    const stored = JSON.parse(localStorage.getItem('yt-player-sticky-caption') ?? '{}') as {
+      data?: string;
+    };
+    expect(stored.data).toBe('false');
   });
 
   it('keeps the hide style until captions are actually turned off', async () => {

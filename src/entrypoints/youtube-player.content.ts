@@ -8,6 +8,10 @@ import {
   videoIdFromTimedTextUrl,
   withTimedTextPot,
 } from '../lib/transcript/select-track';
+import {
+  resolveCaptionLanguage,
+  spokenLanguageFromCaptionList,
+} from '../lib/transcript/spoken-language';
 import { MAX_CAPTION_BYTES } from '../lib/transcript/limits';
 import { parseVideoId, isShortsPath, YOUTUBE_MATCHES } from '../lib/youtube/video-id';
 import {
@@ -52,6 +56,12 @@ type PlayerResponse = {
         vssId?: string;
         name?: { simpleText?: string };
       }>;
+      audioTracks?: Array<{
+        captionTrackIndices?: number[];
+        languageCode?: string;
+        audioTrackId?: string;
+      }>;
+      defaultAudioTrackIndex?: number;
     };
   };
 };
@@ -254,6 +264,9 @@ function snapshotFrom(response: PlayerResponse | null): PlayerSnapshot {
     isShorts: isShortsPath(href),
     isMusic: (micro?.category ?? '').toLowerCase() === 'music',
     tracks: tracksFrom(matched),
+    spokenLanguage: spokenLanguageFromCaptionList(
+      matched?.captions?.playerCaptionsTracklistRenderer,
+    ),
   };
 }
 
@@ -469,6 +482,20 @@ function captureMatchesVideo(videoId: string): unknown | null {
   return null;
 }
 
+function captionPrefsForResponse(
+  prefs: { language: string; preferManual: boolean },
+  response: PlayerResponse | null,
+): { language: string; preferManual: boolean } {
+  const tracks = tracksFrom(response);
+  const spoken = spokenLanguageFromCaptionList(
+    response?.captions?.playerCaptionsTracklistRenderer,
+  );
+  return {
+    ...prefs,
+    language: resolveCaptionLanguage(prefs.language, spoken, tracks),
+  };
+}
+
 function rankTracks(
   tracks: CaptionTrackPayload[],
   prefs: { language: string; preferManual: boolean },
@@ -564,12 +591,16 @@ async function captureViaCaptionNudge(
     if (hideFlash) {
       hideCaptionFlash(document);
     }
-    const selected = selectCaptionTrack(tracksFrom(readPlayerResponse()), prefs);
-    const option = captionTrackOptionForLanguage(selected, prefs.language);
+    const response = readPlayerResponse();
+    const resolved = captionPrefsForResponse(prefs, response);
+    const selected = selectCaptionTrack(tracksFrom(response), resolved);
+    const option = captionTrackOptionForLanguage(selected, resolved.language);
     const languageFallbacks = uniqueUrls([
       option.languageCode,
-      prefs.language,
-      prefs.language.includes('-') ? prefs.language.slice(0, 2) : `${prefs.language}-US`,
+      resolved.language,
+      resolved.language.includes('-')
+        ? resolved.language.slice(0, 2)
+        : `${resolved.language}-US`,
     ]).filter((code) => code.length >= 2);
 
     try {
@@ -588,9 +619,10 @@ async function captureViaCaptionNudge(
         if (hit) {
           return hit;
         }
+        const later = readPlayerResponse();
         const afterPot = await jsonFromTracks(
-          tracksFrom(readPlayerResponse()),
-          prefs,
+          tracksFrom(later),
+          captionPrefsForResponse(resolved, later),
           signal,
           2500,
         );
@@ -621,22 +653,27 @@ async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> 
     return captured;
   }
 
-  const tryTracks = async (tracks: CaptionTrackPayload[], timeoutMs = 5000) => {
+  const tryResponse = async (response: PlayerResponse | null, timeoutMs = 5000) => {
     if (abort.signal.aborted) {
       return null;
     }
-    return jsonFromTracks(tracks, prefs, abort.signal, timeoutMs);
+    const resolved = captionPrefsForResponse(prefs, response);
+    return jsonFromTracks(tracksFrom(response), resolved, abort.signal, timeoutMs);
   };
 
-  const playerTracks = tracksFrom(readPlayerResponse());
-  const fromPlayer = await tryTracks(playerTracks, prefs.nudgeCaptions ? 2000 : 5000);
+  const playerResponse = readPlayerResponse();
+  const fromPlayer = await tryResponse(playerResponse, prefs.nudgeCaptions ? 2000 : 5000);
   if (fromPlayer) {
     return fromPlayer;
   }
 
   if (prefs.nudgeCaptions && videoId) {
     try {
-      const nudged = await captureViaCaptionNudge(videoId, prefs, abort.signal);
+      const nudged = await captureViaCaptionNudge(
+        videoId,
+        captionPrefsForResponse(prefs, playerResponse),
+        abort.signal,
+      );
       if (nudged) {
         return nudged;
       }
@@ -650,7 +687,7 @@ async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> 
   if (videoId) {
     try {
       const android = await innertubePlayer(videoId, 'ANDROID', abort.signal);
-      const fromAndroid = await tryTracks(tracksFrom(android));
+      const fromAndroid = await tryResponse(android);
       if (fromAndroid) {
         return fromAndroid;
       }
@@ -661,7 +698,7 @@ async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> 
     }
     try {
       const web = await innertubePlayer(videoId, 'WEB', abort.signal);
-      const fromWeb = await tryTracks(tracksFrom(web));
+      const fromWeb = await tryResponse(web);
       if (fromWeb) {
         return fromWeb;
       }
@@ -682,7 +719,11 @@ async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> 
 
   if (prefs.nudgeCaptions && videoId && !abort.signal.aborted) {
     try {
-      return await captureViaCaptionNudge(videoId, prefs, abort.signal);
+      return await captureViaCaptionNudge(
+        videoId,
+        captionPrefsForResponse(prefs, readPlayerResponse()),
+        abort.signal,
+      );
     } catch {
       return captureMatchesVideo(videoId);
     }

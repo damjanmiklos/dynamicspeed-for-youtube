@@ -41,6 +41,7 @@ export type PlayerSnapshot = {
   isShorts: boolean;
   isMusic: boolean;
   tracks: CaptionTrackPayload[];
+  spokenLanguage: string | null;
 };
 
 export const YOUTUBE_ORIGINS = new Set([

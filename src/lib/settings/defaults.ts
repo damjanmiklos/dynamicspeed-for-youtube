@@ -76,6 +76,11 @@ export function migrateSettings(input: unknown): DynamicSpeedSettings {
   if (previousVersion < 3 && source.minChunkSec === 0.15) {
     source.minChunkSec = 0.1;
   }
+  // v3 and earlier defaulted caption language to English, which picked English
+  // ASR/translations on non-English videos. Spoken-language auto is the new default.
+  if (previousVersion < 4 && source.captionLanguage === 'en') {
+    source.captionLanguage = 'auto';
+  }
   source.version = Math.max(previousVersion, SETTINGS_VERSION);
   return parseSettings(source);
 }

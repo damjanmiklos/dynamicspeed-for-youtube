@@ -10,7 +10,7 @@ export const ChannelOverrideSchema = z.object({
 
 export const DynamicSpeedSettingsSchema = z
   .object({
-    version: z.number().default(3),
+    version: z.number().default(4),
     enabled: z.boolean().default(true),
     targetWpm: z.number().min(LIMITS.targetWpm.min).max(LIMITS.targetWpm.max).default(165),
     minSpeed: z.number().min(LIMITS.minSpeed.min).max(LIMITS.minSpeed.max).default(0.75),
@@ -52,7 +52,7 @@ export const DynamicSpeedSettingsSchema = z
         { message: 'Invalid channel override key' },
       ),
     disabledVideoIds: z.array(z.string().max(32)).max(200).default([]),
-    captionLanguage: z.string().min(2).max(16).default('en'),
+    captionLanguage: z.string().min(2).max(16).default('auto'),
     preferManualCaptions: z.boolean().default(false),
     temporarilyEnableCaptions: z.boolean().default(true),
     manualOverrideTimeoutSec: z.number().min(0).max(60).default(10),
@@ -77,4 +77,4 @@ export type DynamicSpeedSettings = z.infer<typeof DynamicSpeedSettingsSchema>;
 
 export const SETTINGS_STORAGE_KEY = 'ds.settings';
 export const TRANSCRIPT_CACHE_KEY = 'ds.transcriptCache.v3';
-export const SETTINGS_VERSION = 3;
+export const SETTINGS_VERSION = 4;

@@ -63,9 +63,9 @@ export const SETTINGS_HELP = {
   captionLanguage: {
     label: 'About Caption language',
     body: [
-      'Preferred caption track when YouTube offers more than one. DynamicSpeed estimates spoken WPM from timed captions, so the chosen language should match what you are actually hearing.',
-      'Tracks whose language code equals this value (or starts with it, such as en-US for English) are ranked first. If that language is missing, another available track is used.',
-      'Changing this reloads captions for the current video. Auto-generated tracks can still be chosen depending on Prefer manual captions.',
+      'Default is Spoken language (this video): DynamicSpeed reads YouTube’s auto-captions / default audio track and uses that language for this video only. A German talk then uses German captions even if you also watch English videos.',
+      'Pinning a language (for example English) always prefers that track when it exists. That is the wrong choice if you are bilingual, because English auto-captions on a German video will not match the speech you hear.',
+      'If the spoken language has no captions, another available track is used. Changing this reloads captions for the current video. Auto-generated vs manual still follows Prefer manual captions.',
     ],
   },
   backup: {

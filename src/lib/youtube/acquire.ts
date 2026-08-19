@@ -2,6 +2,10 @@ import { requestFromMain } from '../bridge/isolated';
 import type { PlayerSnapshot } from '../bridge/protocol';
 import { parseJson3Safe } from '../transcript/parse-json3';
 import { bindTimedTextToVideo, selectCaptionTrack } from '../transcript/select-track';
+import {
+  resolveCaptionLanguage,
+  spokenLanguageFromCaptionList,
+} from '../transcript/spoken-language';
 import type { CaptionTrack, WordToken } from '../transcript/types';
 import { recallTokens, rememberTokens } from './cache';
 import { parseVideoId } from './video-id';
@@ -68,6 +72,7 @@ async function readSnapshot(
     isShorts: false,
     isMusic: false,
     tracks: [],
+    spokenLanguage: null,
   };
   const deadline = Date.now() + 6000;
   let snapshot = empty;
@@ -99,6 +104,10 @@ function isPlayerSnapshot(value: unknown): value is PlayerSnapshot {
   }
   return (
     (snapshot.videoId === null || typeof snapshot.videoId === 'string') &&
+    (snapshot.spokenLanguage == null ||
+      (typeof snapshot.spokenLanguage === 'string' &&
+        snapshot.spokenLanguage.length >= 2 &&
+        snapshot.spokenLanguage.length <= 16)) &&
     snapshot.tracks.every(
       (track) =>
         track &&
@@ -125,9 +134,15 @@ export async function acquireTranscript(
   const snapshot = await readSnapshot(pageVideoId, signal);
   throwIfAborted(signal);
   const trustedId = pageVideoId;
+  const tracks = asTracks(snapshot, trustedId);
+  const language = resolveCaptionLanguage(
+    settings.captionLanguage,
+    snapshot.spokenLanguage ?? spokenLanguageFromCaptionList({ captionTracks: tracks }),
+    tracks,
+  );
 
-  const track = selectCaptionTrack(asTracks(snapshot, trustedId), {
-    language: settings.captionLanguage,
+  const track = selectCaptionTrack(tracks, {
+    language,
     preferManual: settings.preferManualCaptions,
   });
 
@@ -148,7 +163,7 @@ export async function acquireTranscript(
     'ACQUIRE_FALLBACK_TRANSCRIPT',
     trustedId,
     {
-      language: settings.captionLanguage,
+      language,
       preferManual: settings.preferManualCaptions,
       nudgeCaptions: settings.temporarilyEnableCaptions,
     },
@@ -158,13 +173,13 @@ export async function acquireTranscript(
   const capturedTokens = tokensFromUnknown(
     captured,
     settings,
-    track?.languageCode ?? settings.captionLanguage,
+    track?.languageCode ?? language,
   );
   if (capturedTokens.length > 0) {
     void rememberTokens(
       {
         videoId: trustedId,
-        language: track?.languageCode ?? settings.captionLanguage,
+        language: track?.languageCode ?? language,
         trackKind: track?.kind ?? 'asr',
       },
       capturedTokens,

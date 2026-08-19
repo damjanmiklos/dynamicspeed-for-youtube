@@ -245,7 +245,11 @@ export function OptionsApp() {
                   onChange={(responsiveness) => void update({ responsiveness })}
                 />
               </Row>
-              <Row title="Caption language" hint="Preferred caption track when several exist." help={SETTINGS_HELP.captionLanguage}>
+              <Row
+                title="Caption language"
+                hint="Default uses the spoken language of the current video. Pin a language only if you always want that track."
+                help={SETTINGS_HELP.captionLanguage}
+              >
                 <SelectField
                   value={settings.captionLanguage}
                   options={CAPTION_LANGUAGES}

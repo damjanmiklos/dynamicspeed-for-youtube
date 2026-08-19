@@ -1,4 +1,7 @@
+export const CAPTION_LANGUAGE_AUTO = 'auto';
+
 export const CAPTION_LANGUAGES: { code: string; label: string }[] = [
+  { code: CAPTION_LANGUAGE_AUTO, label: 'Spoken language (this video)' },
   { code: 'en', label: 'English' },
   { code: 'en-US', label: 'English (US)' },
   { code: 'en-GB', label: 'English (UK)' },

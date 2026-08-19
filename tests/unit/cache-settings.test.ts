@@ -143,6 +143,7 @@ describe('settings schema', () => {
     expect(settings.minChunkSec).toBe(0.1);
     expect(settings.spokenDutyStrength).toBe(0.4);
     expect(settings.preferManualCaptions).toBe(false);
+    expect(settings.captionLanguage).toBe('auto');
     expect(settings.expireCaptionCacheAfterWeek).toBe(true);
     expect(settings.temporarilyEnableCaptions).toBe(true);
     expect(settings.minSpeed).toBeLessThan(settings.maxSpeed);
@@ -159,6 +160,15 @@ describe('settings schema', () => {
     expect(keptV2.minChunkSec).toBe(0.3);
     const keptV3 = migrateSettings({ version: 3, minChunkSec: 0.15 });
     expect(keptV3.minChunkSec).toBe(0.15);
+  });
+
+  it('migrates the old English caption default to spoken-language auto', () => {
+    const fromDefault = migrateSettings({ version: 3, captionLanguage: 'en' });
+    expect(fromDefault.captionLanguage).toBe('auto');
+    const pinnedEnglish = migrateSettings({ version: 4, captionLanguage: 'en' });
+    expect(pinnedEnglish.captionLanguage).toBe('en');
+    const german = migrateSettings({ version: 3, captionLanguage: 'de' });
+    expect(german.captionLanguage).toBe('de');
   });
 
   it('rejects inverted speeds by repairing them', () => {

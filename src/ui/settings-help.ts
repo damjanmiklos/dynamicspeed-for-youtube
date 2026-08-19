@@ -39,8 +39,8 @@ export const SETTINGS_HELP = {
   fallbackSpeed: {
     label: 'About Default speed',
     body: [
-      'The rate DynamicSpeed uses when it is enabled but does not yet have a usable caption timeline — at the start of a video, and whenever captions cannot be found.',
-      'Playback eases to this value over a fraction of a second instead of jumping. Once captions arrive, speed then eases from this default toward the calculated curve over about two seconds, so the first words are not a sudden snap.',
+      'The rate DynamicSpeed uses whenever it is enabled but the WPM curve is not ready — while captions are still being extracted, at the start of a video, and if captions cannot be found. Playback is held on this value until the transcript is ready; it does not follow a previous video’s curve in the meantime.',
+      'Once captions arrive, speed eases from this default toward the calculated curve over about two seconds, so the first words are not a sudden snap.',
       'Set this to 1× if you prefer ordinary YouTube until captions load. Set it nearer your usual listening speed if you would rather not wait at 1×.',
     ],
   },

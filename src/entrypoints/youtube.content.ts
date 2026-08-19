@@ -55,6 +55,7 @@ export default defineContentScript({
 
     const loadForCurrentVideo = async () => {
       loadAbort?.abort();
+      controller.setTokens([], 'loading');
       const abort = new AbortController();
       loadAbort = abort;
       const gen = ++loadGeneration;
@@ -79,7 +80,6 @@ export default defineContentScript({
         controller.setTokens([], 'no-video');
         return;
       }
-      controller.setTranscriptStatus('loading');
       const deadline = Date.now() + (settings.temporarilyEnableCaptions ? 32_000 : 20_000);
       let lastError: unknown;
       while (Date.now() < deadline && gen === loadGeneration && !abort.signal.aborted) {
@@ -147,6 +147,7 @@ export default defineContentScript({
     const unlisten = listenToMainEvents((name) => {
       if (name === 'VIDEO_ID_CHANGED') {
         snapshot = null;
+        controller.setTokens([], 'loading');
         if (appliedSettings && !appliedSettings.enabled) {
           return;
         }

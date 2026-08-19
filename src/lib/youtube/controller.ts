@@ -10,7 +10,7 @@ import {
   type SpeedCurve,
 } from '../pacing';
 import { clamp } from '../pacing/feel';
-import { FALLBACK_SLEW_SEC, INTRO_SLEW_SEC, SEEK_SNAP_SEC } from '../settings/limits';
+import { INTRO_SLEW_SEC, SEEK_SNAP_SEC } from '../settings/limits';
 import type { DynamicSpeedSettings } from '../settings/schema';
 import { speedCalculationChanged } from '../settings/diff';
 import { resolveForPage, type ResolvedPlaybackSettings } from '../settings/resolve';
@@ -32,6 +32,14 @@ import type { PageState } from '../messaging/protocol';
 export type ControllerHooks = {
   getChannel: () => { channelId: string | null; channelName: string | null; title: string | null; isLive: boolean; isMusic: boolean };
 };
+
+/** Curve rates apply only after captions are fully acquired and parsed. */
+export function shouldApplySpeedCurve(
+  transcriptStatus: string,
+  hasCurve: boolean,
+): boolean {
+  return hasCurve && transcriptStatus === 'ready';
+}
 
 export function createPlaybackController(hooks: ControllerHooks) {
   let settings: DynamicSpeedSettings | null = null;
@@ -148,7 +156,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
   }
 
   function snapRateToPlayhead(): void {
-    if (!video || !curve) {
+    if (!video || !curve || transcriptStatus !== 'ready') {
       lastVideoTime = video?.currentTime ?? lastVideoTime;
       return;
     }
@@ -170,6 +178,12 @@ export function createPlaybackController(hooks: ControllerHooks) {
 
   function fallbackRate(current: ResolvedPlaybackSettings): number {
     return clamp(current.fallbackSpeed, current.minSpeed, current.maxSpeed);
+  }
+
+  function pinToFallback(current: ResolvedPlaybackSettings): void {
+    cancelIntro();
+    applied = fallbackRate(current);
+    ownRate(applied);
   }
 
   function tick(): void {
@@ -215,15 +229,8 @@ export function createPlaybackController(hooks: ControllerHooks) {
       return;
     }
 
-    if (!curve) {
-      cancelIntro();
-      const desired = fallbackRate(current);
-      const limit = Math.max(
-        current.slewRateLimit,
-        Math.abs(desired - applied) / FALLBACK_SLEW_SEC,
-      );
-      applied = slewStep(applied, desired, dt, limit);
-      ownRate(applied);
+    if (!curve || transcriptStatus !== 'ready') {
+      pinToFallback(current);
       updateChip(applied, current);
       return;
     }
@@ -299,7 +306,10 @@ export function createPlaybackController(hooks: ControllerHooks) {
       removePlayerChip();
       return;
     }
-    const spoken = curve && video ? wpmAt(curve, video.currentTime) : null;
+    const spoken =
+      curve && transcriptStatus === 'ready' && video
+        ? wpmAt(curve, video.currentTime)
+        : null;
     const wpmUnit = current && wpmAdjustmentsActive(current) ? 'adjusted WPM' : 'WPM';
     const conflict = speedConflict.isActive();
     const inactive =
@@ -358,20 +368,41 @@ export function createPlaybackController(hooks: ControllerHooks) {
       }
     },
     setTokens(next: WordToken[], status: string) {
-      const hadCurve = Boolean(curve);
       tokens = next;
       transcriptStatus = status;
       rebuildCurve(video?.duration);
-      if (!hadCurve && curve) {
+      const live = shouldApplySpeedCurve(status, Boolean(curve));
+      if (live) {
         introFrom = applied;
         introStartedAt = performance.now();
         introActive = true;
-      } else if (!curve) {
-        cancelIntro();
+        return;
+      }
+      cancelIntro();
+      const current = resolved();
+      if (current && video && automationOwnsRate(current)) {
+        pinToFallback(current);
+        updateChip(applied, current);
       }
     },
     setTranscriptStatus(status: string) {
+      if (status === 'ready') {
+        transcriptStatus = status;
+        return;
+      }
+      if (transcriptStatus === status && !curve && tokens.length === 0) {
+        transcriptStatus = status;
+        return;
+      }
+      tokens = [];
       transcriptStatus = status;
+      curve = null;
+      cancelIntro();
+      const current = resolved();
+      if (current && video && automationOwnsRate(current)) {
+        pinToFallback(current);
+        updateChip(applied, current);
+      }
     },
     setChipClickHandler(handler: () => void) {
       onChipClick = handler;
@@ -398,10 +429,18 @@ export function createPlaybackController(hooks: ControllerHooks) {
         channelName: meta.channelName,
         title: meta.title,
         playbackRate: video?.playbackRate ?? null,
-        spokenWpm: curve && video ? wpmAt(curve, video.currentTime) : null,
-        hasTranscript: tokens.length > 0,
+        spokenWpm:
+          curve && transcriptStatus === 'ready' && video
+            ? wpmAt(curve, video.currentTime)
+            : null,
+        hasTranscript: tokens.length > 0 && transcriptStatus === 'ready',
         transcriptStatus,
-        automationActive: Boolean(current?.automationAllowed && curve && performance.now() >= overrideUntil && forceHold == null),
+        automationActive: Boolean(
+          current?.automationAllowed &&
+            shouldApplySpeedCurve(transcriptStatus, Boolean(curve)) &&
+            performance.now() >= overrideUntil &&
+            forceHold == null,
+        ),
         speedConflict: speedConflict.isActive(),
         blockReason: current?.blockReason ?? null,
         isShorts: isShortsPath(location.href),

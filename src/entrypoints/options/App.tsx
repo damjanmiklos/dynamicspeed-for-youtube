@@ -463,6 +463,22 @@ export function OptionsApp() {
                   onChange={(minChunkSec) => void update({ minChunkSec })}
                 />
               </Row>
+              <Row
+                title="Spoken-time compensation"
+                hint="When lists or commentary leave short gaps between words, raise estimated WPM toward the rate during actual speech. 0% is off; 100% fully ignores those short gaps. Long pauses are not included."
+                help={SETTINGS_HELP.spokenDuty}
+              >
+                <SliderField
+                  label=""
+                  min={0}
+                  max={100}
+                  step={5}
+                  decimals={0}
+                  value={Math.round(settings.spokenDutyStrength * 100)}
+                  unit="%"
+                  onChange={(percent) => void update({ spokenDutyStrength: percent / 100 })}
+                />
+              </Row>
             </section>
           )}
 
@@ -631,7 +647,7 @@ export function OptionsApp() {
               </Row>
               <Row
                 title="Prefer manual captions"
-                hint="Use creator-uploaded captions when they exist. Auto-captions often have better word timing."
+                hint="Off by default. Use creator-uploaded captions when they exist. Auto-captions often have better word timing."
                 help={SETTINGS_HELP.preferManual}
               >
                 <div className="flex justify-end">

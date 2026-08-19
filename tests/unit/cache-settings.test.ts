@@ -141,6 +141,8 @@ describe('settings schema', () => {
     expect(settings.targetWpm).toBe(165);
     expect(settings.fallbackSpeed).toBe(1);
     expect(settings.minChunkSec).toBe(0.15);
+    expect(settings.spokenDutyStrength).toBe(0.4);
+    expect(settings.preferManualCaptions).toBe(false);
     expect(settings.expireCaptionCacheAfterWeek).toBe(true);
     expect(settings.temporarilyEnableCaptions).toBe(true);
     expect(settings.minSpeed).toBeLessThan(settings.maxSpeed);
@@ -191,6 +193,7 @@ describe('settings that change speed', () => {
     expect(speedCalculationChanged(base, { ...base, bRollAcceleration: true })).toBe(
       true,
     );
+    expect(speedCalculationChanged(base, { ...base, spokenDutyStrength: 0 })).toBe(true);
     expect(speedCalculationChanged(base, { ...base, showPlayerChip: false })).toBe(
       false,
     );

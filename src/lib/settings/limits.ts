@@ -9,6 +9,7 @@ export const LIMITS = {
   slewRateLimit: { min: 0.05, max: 2, step: 0.05, decimals: 2 },
   jargonCompensation: { min: 1, max: 1.5, step: 0.01, decimals: 2 },
   minChunkSec: { min: 0.1, max: 1, step: 0.05, decimals: 2 },
+  spokenDutyStrength: { min: 0, max: 1, step: 0.05, decimals: 2 },
   longPauseSec: { min: 0.5, max: 5, step: 0.1, decimals: 1 },
   manualOverrideTimeoutSec: { min: 0, max: 60, step: 1, decimals: 0 },
   chipDecimalPlaces: { min: 1, max: 2, step: 1, decimals: 0 },

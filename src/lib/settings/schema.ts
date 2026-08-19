@@ -30,6 +30,7 @@ export const DynamicSpeedSettingsSchema = z
     syllableWeighting: z.boolean().default(true),
     jargonCompensation: z.number().min(1).max(1.5).default(1.15),
     minChunkSec: z.number().min(0.1).max(1).default(0.15),
+    spokenDutyStrength: z.number().min(0).max(1).default(0.4),
     wpmFloor: z.number().min(20).max(200).default(60),
     wpmCeil: z.number().min(200).max(800).default(450),
 
@@ -52,7 +53,7 @@ export const DynamicSpeedSettingsSchema = z
       ),
     disabledVideoIds: z.array(z.string().max(32)).max(200).default([]),
     captionLanguage: z.string().min(2).max(16).default('en'),
-    preferManualCaptions: z.boolean().default(true),
+    preferManualCaptions: z.boolean().default(false),
     temporarilyEnableCaptions: z.boolean().default(true),
     manualOverrideTimeoutSec: z.number().min(0).max(60).default(10),
     ignoreAds: z.boolean().default(true),

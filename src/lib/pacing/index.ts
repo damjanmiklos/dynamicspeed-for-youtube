@@ -18,6 +18,15 @@ export {
 } from './curve';
 export type { SpeedCurve, CurveBuildOptions, SpeechChunk } from './curve';
 export {
+  estimateVoicedSec,
+  spokenDutyMultiplier,
+  excludeLongPauseTails,
+  wpmWithSpokenDuty,
+  ARTICULATION_REF_WPM,
+  ARTICULATION_SEC_PER_WORD,
+  SPOKEN_DUTY_WINDOW_SEC,
+} from './spoken-duty';
+export {
   countSyllables,
   isEasyWord,
   isJargonWord,

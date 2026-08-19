@@ -23,6 +23,7 @@ const options = (overrides: Partial<CurveBuildOptions> = {}): CurveBuildOptions 
   treatMusicAsBRoll: true,
   syllableWeighting: true,
   jargonCompensation: 1.15,
+  spokenDutyStrength: 0,
   gaussianSigma: 4,
   medianWindowSec: 3,
   slewRateLimit: 0.4,
@@ -148,6 +149,61 @@ describe('speed curve', () => {
     const tokens = parseJson3(json, { syllableWeighting: true });
     assertFiniteCurve(tokens, options({ bRollAcceleration: false }));
   });
+
+  it('slows list-like sparse words when spoken-time compensation is on', () => {
+    const tokens: WordToken[] = [];
+    for (let i = 0; i < 10; i += 1) {
+      tokens.push(token(i, i + 1, 'item'));
+    }
+    const sparseOpts = {
+      syllableWeighting: false,
+      gaussianSigma: 1,
+      medianWindowSec: 1,
+      targetWpm: 180,
+      maxSpeed: 3,
+      wpmFloor: 60,
+    };
+    const off = buildSpeedCurve(tokens, options({ ...sparseOpts, spokenDutyStrength: 0 }));
+    const on = buildSpeedCurve(tokens, options({ ...sparseOpts, spokenDutyStrength: 0.5 }));
+    const offRate = rateAt(off, 4.5);
+    const onRate = rateAt(on, 4.5);
+    expect(offRate).toBeGreaterThan(2.4);
+    expect(onRate).toBeLessThan(offRate - 0.6);
+    expect(onRate).toBeLessThan(1.4);
+  });
+
+  it('does not speed through a long pause when compensation is on and b-roll is off', () => {
+    const tokens = [
+      token(0, 1, 'hello', { syllables: 2 }),
+      token(1.2, 2.2, 'there', { syllables: 1 }),
+      token(8, 9, 'later', { syllables: 2 }),
+      token(9.2, 10.2, 'on', { syllables: 1 }),
+    ];
+    const curve = buildSpeedCurve(
+      tokens,
+      options({ bRollAcceleration: false, maxSpeed: 3, spokenDutyStrength: 0.5 }),
+    );
+    const before = rateAt(curve, 1.5);
+    const during = rateAt(curve, 5);
+    const after = rateAt(curve, 9.5);
+    const lo = Math.min(before, after);
+    const hi = Math.max(before, after);
+    expect(during).toBeGreaterThanOrEqual(lo - 0.08);
+    expect(during).toBeLessThanOrEqual(hi + 0.08);
+    expect(during).toBeLessThan(3);
+  });
+
+  it('still heads toward max speed in a long pause when b-roll is on', () => {
+    const tokens = [
+      token(0, 1, 'hello', { syllables: 2 }),
+      token(10, 11, 'later', { syllables: 2 }),
+    ];
+    const curve = buildSpeedCurve(
+      tokens,
+      options({ bRollAcceleration: true, maxSpeed: 3, spokenDutyStrength: 0.5 }),
+    );
+    expect(rateAt(curve, 5)).toBeGreaterThan(2.2);
+  });
 });
 
 describe('property: random token streams', () => {
@@ -162,7 +218,13 @@ describe('property: random token streams', () => {
         tokens.push(token(t, t + dur, `w${i}`, { syllables: 1 + (i % 4) }));
         t += dur;
       }
-      assertFiniteCurve(tokens, options({ bRollAcceleration: seed % 2 === 0 }));
+      assertFiniteCurve(
+        tokens,
+        options({
+          bRollAcceleration: seed % 2 === 0,
+          spokenDutyStrength: seed % 3 === 0 ? 0.5 : 0,
+        }),
+      );
     }
   });
 });

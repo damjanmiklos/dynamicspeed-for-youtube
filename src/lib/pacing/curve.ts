@@ -3,6 +3,11 @@ import { clamp, resolveDynamics, type Dynamics } from './feel';
 import { gaussianSmooth, emaSmooth } from './gaussian';
 import { movingMedian, type Sample } from './median';
 import { pchipEvaluate, pchipSlopes } from './pchip';
+import {
+  excludeLongPauseTails,
+  SPOKEN_DUTY_WINDOW_SEC,
+  wpmWithSpokenDuty,
+} from './spoken-duty';
 import { effectiveWords } from './syllables';
 
 export type CurveBuildOptions = {
@@ -17,6 +22,7 @@ export type CurveBuildOptions = {
   treatMusicAsBRoll: boolean;
   syllableWeighting: boolean;
   jargonCompensation: number;
+  spokenDutyStrength: number;
   causal?: boolean;
   durationHint?: number;
 } & Dynamics;
@@ -221,16 +227,28 @@ export function buildSpeedCurve(
   }
 
   const merged = mergeShortChunks(tokens, options.minChunkSec, options);
-  const withWpm = instantaneousWpm(merged, options.wpmFloor, options.wpmCeil);
-  const segments = splitSpeechSegments(withWpm, options.longPauseSec);
+  const strength = clamp(finite(options.spokenDutyStrength, 0), 0, 1);
+  const prepared =
+    strength > 0 ? excludeLongPauseTails(merged, options.longPauseSec) : merged;
+  const segments = splitSpeechSegments(prepared, options.longPauseSec);
 
   const smoothedChunks: SpeechChunk[] = [];
   for (const segment of segments) {
-    const medianed = movingMedian(samplesFrom(segment), options.medianWindowSec);
+    const withWpm =
+      strength > 0
+        ? wpmWithSpokenDuty(
+            segment,
+            strength,
+            SPOKEN_DUTY_WINDOW_SEC,
+            options.wpmFloor,
+            options.wpmCeil,
+          )
+        : instantaneousWpm(segment, options.wpmFloor, options.wpmCeil);
+    const medianed = movingMedian(samplesFrom(withWpm), options.medianWindowSec);
     const smoothed = options.causal
       ? emaSmooth(medianed, options.gaussianSigma)
       : gaussianSmooth(medianed, options.gaussianSigma);
-    smoothedChunks.push(...applySamples(segment, smoothed));
+    smoothedChunks.push(...applySamples(withWpm, smoothed));
   }
 
   if (smoothedChunks.length === 0) {
@@ -364,6 +382,7 @@ export function curveBuildInputFromSettings(
     treatMusicAsBRoll: boolean;
     syllableWeighting: boolean;
     jargonCompensation: number;
+    spokenDutyStrength: number;
     responsiveness: number;
     customDynamicsUnlocked: boolean;
     gaussianSigma: number;
@@ -385,6 +404,7 @@ export function curveBuildInputFromSettings(
     treatMusicAsBRoll: settings.treatMusicAsBRoll,
     syllableWeighting: settings.syllableWeighting,
     jargonCompensation: settings.jargonCompensation,
+    spokenDutyStrength: settings.spokenDutyStrength,
     ...extra,
   };
 }

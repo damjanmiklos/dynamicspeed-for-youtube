@@ -124,6 +124,14 @@ export const SETTINGS_HELP = {
       'This slider only applies while custom dynamics are unlocked. Low values feel glued; high values reach the new rate sooner.',
     ],
   },
+  spokenDuty: {
+    label: 'About spoken-time compensation',
+    body: [
+      'Caption timings often include short gaps after each word, especially in lists, reaction commentary, and hunt-and-peck speech. Those gaps make spoken WPM look too low, so playback speeds up and the actual words fly by.',
+      'This control estimates what fraction of caption-covered time is really voiced, then raises WPM partway toward that articulation rate: adjusted WPM = measured WPM × ((1 − strength) + strength / spoken fraction). 0% is off (old behavior). 100% fully uses voiced time only. The default 40% is a partial correction.',
+      'Gaps longer than Long pause are excluded here and stay under Pauses & b-roll. A stretch with no speech at all is not boosted (the spoken fraction would be 0%).',
+    ],
+  },
   minChunk: {
     label: 'About minimum caption chunk',
     body: [
@@ -197,7 +205,7 @@ export const SETTINGS_HELP = {
   preferManual: {
     label: 'About prefer manual captions',
     body: [
-      'When this is on, creator-uploaded caption tracks are preferred over auto-generated (ASR) tracks in the same language.',
+      'When this is on, creator-uploaded caption tracks are preferred over auto-generated (ASR) tracks in the same language. The default is off, because auto-captions usually have tighter word timings for WPM.',
       'Manual captions often have cleaner wording. Auto-captions often have tighter word-level timings, which can make WPM estimation more faithful to how the person actually spoke.',
       'If the preferred kind is missing, the other kind is still used. Pair this with Caption language to pick the right track.',
     ],

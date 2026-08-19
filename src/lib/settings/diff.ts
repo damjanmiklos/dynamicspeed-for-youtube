@@ -18,6 +18,7 @@ export function speedCalculationChanged(
     previous.syllableWeighting !== next.syllableWeighting ||
     previous.jargonCompensation !== next.jargonCompensation ||
     previous.minChunkSec !== next.minChunkSec ||
+    previous.spokenDutyStrength !== next.spokenDutyStrength ||
     previous.wpmFloor !== next.wpmFloor ||
     previous.wpmCeil !== next.wpmCeil ||
     previous.bRollAcceleration !== next.bRollAcceleration ||

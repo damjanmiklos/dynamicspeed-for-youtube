@@ -319,7 +319,12 @@ function hideCaptionCss(): string {
     `html[${HIDE_CAPTIONS_ATTR}] :fullscreen .ytp-caption-window-container`,
     `html[${HIDE_CAPTIONS_ATTR}] :-webkit-full-screen .ytp-caption-window-container`,
   ];
-  return `${selectors.join(',')}{${hide}}${containers.join(',')}{${hide}display:none!important;}`;
+  return `${selectors.join(',')}{${hide}}${containers.join(',')}{${hide}display:none!important;}
+html[${HIDE_CAPTIONS_ATTR}] .ytp-subtitles-button,
+html[${HIDE_CAPTIONS_ATTR}] .ytp-subtitles-button * {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}`;
 }
 
 function stampCaptionNode(node: HTMLElement): void {
@@ -428,7 +433,7 @@ function startCaptionHideWatch(root: Document): void {
     subtree: true,
     childList: true,
     attributes: true,
-    attributeFilter: ['class', 'style', 'hidden', 'theater', 'fullscreen'],
+    attributeFilter: ['class', 'style', 'hidden', 'theater', 'fullscreen', 'aria-pressed'],
   });
   root.addEventListener('fullscreenchange', onModeChange);
   root.addEventListener('webkitfullscreenchange', onModeChange);
@@ -497,7 +502,7 @@ async function disableCaptionsDisplay(
   options?: { unload?: boolean },
 ): Promise<void> {
   const unload = options?.unload !== false;
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     setCaptionsTrackOff(player);
     if (isSubtitlesButtonPressed(root)) {
       clickSubtitlesButton(root);

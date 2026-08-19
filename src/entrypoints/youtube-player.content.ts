@@ -24,6 +24,7 @@ import {
   captionTrackOptionForLanguage,
   enableCaptionsForCapture,
   hideCaptionFlash,
+  isSubtitlesButtonPressed,
   parseAcquireCaptionPrefs,
   readRememberedCaptionPref,
   readSavedCaptionState,
@@ -615,12 +616,20 @@ async function captureViaCaptionNudge(
         return null;
       }
       const languageCode = languageFallbacks[attempt] ?? option.languageCode;
-      await enableCaptionsForCapture(
-        player,
-        document,
-        { ...option, languageCode },
-        sleep,
-      );
+      if (attempt === 0 || !isSubtitlesButtonPressed(document)) {
+        await enableCaptionsForCapture(
+          player,
+          document,
+          { ...option, languageCode },
+          sleep,
+        );
+      } else {
+        try {
+          player.setOption?.('captions', 'track', { ...option, languageCode });
+        } catch {
+          // keep waiting for timedtext from the track already on
+        }
+      }
       const hit = await waitForCapture(videoId, signal, 2200 + attempt * 600);
       if (hit) {
         return hit;
@@ -661,6 +670,10 @@ async function restoreCaptionsToUserPref(): Promise<void> {
   if (!player) {
     return;
   }
+  const alreadyHiding = document.documentElement.hasAttribute('data-ds-hide-captions');
+  if (!alreadyHiding) {
+    hideCaptionFlash(document);
+  }
   await restoreSavedCaptionState(player, document, CAPTIONS_OFF_STATE, sleep);
 }
 
@@ -669,15 +682,15 @@ async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> 
   const abort = new AbortController();
   fallbackAbort = abort;
   return withCaptionSession(async () => {
-    await restoreCaptionsToUserPref();
+    const prefs = parseAcquireCaptionPrefs(payload);
     const playerForPref = moviePlayer();
     if (playerForPref && readRememberedCaptionPref() == null) {
       resolveCaptureCaptionPref(readSavedCaptionState(playerForPref, document));
     }
-    const prefs = parseAcquireCaptionPrefs(payload);
     const videoId = parseVideoId(location.href) ?? '';
     const captured = captureMatchesVideo(videoId);
     if (captured) {
+      await restoreCaptionsToUserPref();
       return captured;
     }
 
@@ -692,6 +705,7 @@ async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> 
     const playerResponse = readPlayerResponse();
     const fromPlayer = await tryResponse(playerResponse, prefs.nudgeCaptions ? 2000 : 5000);
     if (fromPlayer) {
+      await restoreCaptionsToUserPref();
       return fromPlayer;
     }
 
@@ -717,6 +731,7 @@ async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> 
         const android = await innertubePlayer(videoId, 'ANDROID', abort.signal);
         const fromAndroid = await tryResponse(android);
         if (fromAndroid) {
+          await restoreCaptionsToUserPref();
           return fromAndroid;
         }
       } catch {
@@ -728,6 +743,7 @@ async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> 
         const web = await innertubePlayer(videoId, 'WEB', abort.signal);
         const fromWeb = await tryResponse(web);
         if (fromWeb) {
+          await restoreCaptionsToUserPref();
           return fromWeb;
         }
       } catch {
@@ -742,6 +758,7 @@ async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> 
     }
     const fromDom = scrapeDomTranscript();
     if (fromDom) {
+      await restoreCaptionsToUserPref();
       return fromDom;
     }
 

@@ -114,6 +114,22 @@ describe('caption nudge helpers', () => {
     expect(button.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('does not click CC again when captions are already on for capture', async () => {
+    document.body.innerHTML = `
+      <button class="ytp-subtitles-button" aria-pressed="true"></button>
+    `;
+    const clicks: string[] = [];
+    const button = document.querySelector('.ytp-subtitles-button') as HTMLButtonElement;
+    button.addEventListener('click', () => clicks.push('click'));
+    await enableCaptionsForCapture(
+      { loadModule: vi.fn(), setOption: vi.fn() },
+      document,
+      captionTrackOptionForLanguage({ languageCode: 'en' }, 'en'),
+      async () => undefined,
+    );
+    expect(clicks).toEqual([]);
+  });
+
   it('turns captions off after capture even if a track was still selected', async () => {
     document.body.innerHTML = `
       <button class="ytp-subtitles-button" aria-pressed="true"></button>
@@ -173,6 +189,7 @@ describe('caption nudge helpers', () => {
     const css = document.getElementById('ds-hide-caption-flash')?.textContent ?? '';
     expect(css).toContain('ytp-fullscreen');
     expect(css).toContain('ytp-big-mode');
+    expect(css).toContain('ytp-subtitles-button');
     showCaptionFlash(document);
     expect(document.getElementById('ds-hide-caption-flash')).toBeNull();
     expect(document.documentElement.hasAttribute('data-ds-hide-captions')).toBe(false);

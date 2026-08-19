@@ -9,6 +9,7 @@ import {
   wpmWithSpokenDuty,
 } from './spoken-duty';
 import { effectiveWords } from './syllables';
+import { wpmAdjustmentCalibration } from './wpm-calibration';
 
 export type CurveBuildOptions = {
   targetWpm: number;
@@ -149,6 +150,22 @@ function applySamples(chunks: SpeechChunk[], samples: Sample[]): SpeechChunk[] {
   }));
 }
 
+function scaleChunkWpm(
+  chunks: SpeechChunk[],
+  scale: number,
+  wpmFloor: number,
+  wpmCeil: number,
+): SpeechChunk[] {
+  const s = finite(scale, 1);
+  if (!(s > 1e-6) || Math.abs(s - 1) < 1e-9) {
+    return chunks;
+  }
+  return chunks.map((chunk) => ({
+    ...chunk,
+    wpm: clamp(finite(chunk.wpm, wpmFloor) / s, wpmFloor, wpmCeil),
+  }));
+}
+
 export function mapWpmToRate(
   wpm: number,
   targetWpm: number,
@@ -248,7 +265,13 @@ export function buildSpeedCurve(
     const smoothed = options.causal
       ? emaSmooth(medianed, options.gaussianSigma)
       : gaussianSmooth(medianed, options.gaussianSigma);
-    smoothedChunks.push(...applySamples(withWpm, smoothed));
+    const scaled = scaleChunkWpm(
+      applySamples(withWpm, smoothed),
+      wpmAdjustmentCalibration(options),
+      options.wpmFloor,
+      options.wpmCeil,
+    );
+    smoothedChunks.push(...scaled);
   }
 
   if (smoothedChunks.length === 0) {

@@ -17,7 +17,19 @@ export type AcquireCaptionPrefs = {
   nudgeCaptions: boolean;
 };
 
+export const CAPTIONS_OFF_STATE: SavedCaptionState = {
+  buttonPressed: false,
+  windowVisible: false,
+  track: null,
+};
+
 const FLASH_STYLE_ID = 'ds-hide-caption-flash';
+const USER_CAPTION_PREF_KEY = 'ds.user-captions-wanted';
+const CAPTION_STORAGE_KEYS = [
+  'yt-player-caption-display-mode',
+  'yt-player-sticky-caption',
+  'yt-player-caption-sticky-language',
+] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -106,8 +118,89 @@ export function readSavedCaptionState(
   return { buttonPressed, windowVisible, track };
 }
 
+/**
+ * YouTube keeps the last selected caption track even when CC is off.
+ * Only the subtitles button (what the user sees) counts as “wanted on.”
+ */
 export function userWantedCaptionsOn(saved: SavedCaptionState): boolean {
-  return saved.buttonPressed || saved.windowVisible || Boolean(saved.track);
+  return saved.buttonPressed;
+}
+
+export function readRememberedCaptionPref(): boolean | null {
+  try {
+    const value = sessionStorage.getItem(USER_CAPTION_PREF_KEY);
+    if (value === 'on') {
+      return true;
+    }
+    if (value === 'off') {
+      return false;
+    }
+  } catch {
+    // private mode / opaque origin
+  }
+  return null;
+}
+
+export function writeRememberedCaptionPref(wantedOn: boolean): void {
+  try {
+    sessionStorage.setItem(USER_CAPTION_PREF_KEY, wantedOn ? 'on' : 'off');
+  } catch {
+    // private mode / opaque origin
+  }
+}
+
+export function rememberCaptionPrefFromUserClick(root: ParentNode): void {
+  writeRememberedCaptionPref(isSubtitlesButtonPressed(root));
+}
+
+/**
+ * Prefer the user’s last explicit CC choice in this tab. YouTube often turns
+ * captions back on after a timedtext nudge, which must not overwrite “off.”
+ */
+export function resolveCaptureCaptionPref(saved: SavedCaptionState): boolean {
+  const remembered = readRememberedCaptionPref();
+  if (remembered != null) {
+    return remembered;
+  }
+  const wanted = saved.buttonPressed;
+  writeRememberedCaptionPref(wanted);
+  return wanted;
+}
+
+export function captionStateForRestore(
+  saved: SavedCaptionState,
+  wantedOn: boolean,
+): SavedCaptionState {
+  if (wantedOn) {
+    return saved;
+  }
+  return CAPTIONS_OFF_STATE;
+}
+
+export function snapshotCaptionStorage(): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  try {
+    for (const key of CAPTION_STORAGE_KEYS) {
+      out[key] = window.localStorage.getItem(key);
+    }
+  } catch {
+    // private mode
+  }
+  return out;
+}
+
+export function restoreCaptionStorage(snapshot: Record<string, string | null>): void {
+  try {
+    for (const [key, value] of Object.entries(snapshot)) {
+      if (value == null) {
+        window.localStorage.removeItem(key);
+      } else {
+        window.localStorage.setItem(key, value);
+      }
+    }
+  } catch {
+    // private mode
+  }
 }
 
 export function hideCaptionFlash(root: Document): void {
@@ -138,6 +231,11 @@ export async function enableCaptionsForCapture(
   }
   await sleep(80);
   try {
+    player?.setOption?.('captions', 'stickyCaptions', false);
+  } catch {
+    // option is not always present
+  }
+  try {
     player?.setOption?.('captions', 'track', option);
   } catch {
     // player may reject an incomplete track object
@@ -148,11 +246,42 @@ export async function enableCaptionsForCapture(
   }
 }
 
+async function disableCaptionsDisplay(
+  player: CaptionPlayer | null,
+  root: Document,
+  sleep: (ms: number) => Promise<void>,
+): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      player?.setOption?.('captions', 'track', {});
+    } catch {
+      // continue with the button
+    }
+    if (isSubtitlesButtonPressed(root)) {
+      clickSubtitlesButton(root);
+    }
+    await sleep(120);
+    if (!isSubtitlesButtonPressed(root) && !captionWindowPresent(root)) {
+      break;
+    }
+  }
+  try {
+    player?.unloadModule?.('captions');
+  } catch {
+    // last resort is another button click
+  }
+  await sleep(80);
+  if (isSubtitlesButtonPressed(root)) {
+    clickSubtitlesButton(root);
+  }
+}
+
 export async function restoreSavedCaptionState(
   player: CaptionPlayer | null,
   root: Document,
   saved: SavedCaptionState,
   sleep: (ms: number) => Promise<void>,
+  storageSnapshot?: Record<string, string | null>,
 ): Promise<void> {
   showCaptionFlash(root);
   if (userWantedCaptionsOn(saved)) {
@@ -174,27 +303,15 @@ export async function restoreSavedCaptionState(
     return;
   }
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      player?.setOption?.('captions', 'track', {});
-    } catch {
-      // continue with the button
-    }
-    if (isSubtitlesButtonPressed(root)) {
-      clickSubtitlesButton(root);
-    }
-    await sleep(120);
-    if (!isSubtitlesButtonPressed(root) && !captionWindowPresent(root)) {
-      return;
-    }
+  await disableCaptionsDisplay(player, root, sleep);
+  if (storageSnapshot) {
+    restoreCaptionStorage(storageSnapshot);
   }
-  try {
-    player?.unloadModule?.('captions');
-  } catch {
-    // last resort is another button click
-  }
-  await sleep(80);
-  if (isSubtitlesButtonPressed(root)) {
-    clickSubtitlesButton(root);
+  await sleep(160);
+  if (isSubtitlesButtonPressed(root) || captionWindowPresent(root)) {
+    await disableCaptionsDisplay(player, root, sleep);
+    if (storageSnapshot) {
+      restoreCaptionStorage(storageSnapshot);
+    }
   }
 }

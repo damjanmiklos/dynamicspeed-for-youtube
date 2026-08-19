@@ -1,15 +1,19 @@
 /** @vitest-environment happy-dom */
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  captionStateForRestore,
   captionTrackOptionForLanguage,
   captionsLookEnabled,
   enableCaptionsForCapture,
   hideCaptionFlash,
   parseAcquireCaptionPrefs,
+  readRememberedCaptionPref,
   readSavedCaptionState,
+  resolveCaptureCaptionPref,
   restoreSavedCaptionState,
   showCaptionFlash,
   userWantedCaptionsOn,
+  writeRememberedCaptionPref,
 } from '../../src/lib/youtube/caption-nudge';
 
 describe('parseAcquireCaptionPrefs', () => {
@@ -26,6 +30,11 @@ describe('parseAcquireCaptionPrefs', () => {
 });
 
 describe('caption nudge helpers', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    localStorage.clear();
+  });
+
   it('reads the CC button and restores off without a second click when already off', async () => {
     document.body.innerHTML = `
       <button class="ytp-subtitles-button" aria-pressed="false"></button>
@@ -44,6 +53,39 @@ describe('caption nudge helpers', () => {
     await restoreSavedCaptionState(player, document, saved, async () => undefined);
     expect(clicks).toEqual([]);
     expect(player.setOption).toHaveBeenCalledWith('captions', 'track', {});
+    expect(player.unloadModule).toHaveBeenCalledWith('captions');
+  });
+
+  it('does not treat a leftover selected track as captions the user wanted on', () => {
+    document.body.innerHTML = `
+      <button class="ytp-subtitles-button" aria-pressed="false"></button>
+    `;
+    const player = {
+      getOption: vi.fn(() => ({ languageCode: 'en', kind: 'asr' })),
+    };
+    const saved = readSavedCaptionState(player, document);
+    expect(saved.track).toEqual({ languageCode: 'en', kind: 'asr' });
+    expect(saved.buttonPressed).toBe(false);
+    expect(userWantedCaptionsOn(saved)).toBe(false);
+    expect(resolveCaptureCaptionPref(saved)).toBe(false);
+    expect(readRememberedCaptionPref()).toBe(false);
+  });
+
+  it('keeps an explicit off preference when YouTube later shows captions as on', () => {
+    writeRememberedCaptionPref(false);
+    expect(
+      resolveCaptureCaptionPref({
+        buttonPressed: true,
+        windowVisible: true,
+        track: { languageCode: 'de' },
+      }),
+    ).toBe(false);
+    expect(
+      captionStateForRestore(
+        { buttonPressed: true, windowVisible: true, track: { languageCode: 'de' } },
+        false,
+      ),
+    ).toEqual({ buttonPressed: false, windowVisible: false, track: null });
   });
 
   it('turns captions on with setOption and a button click if still off', async () => {
@@ -68,6 +110,23 @@ describe('caption nudge helpers', () => {
       kind: 'asr',
     });
     expect(button.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('turns captions off after capture even if a track was still selected', async () => {
+    document.body.innerHTML = `
+      <button class="ytp-subtitles-button" aria-pressed="true"></button>
+    `;
+    const button = document.querySelector('.ytp-subtitles-button') as HTMLButtonElement;
+    button.addEventListener('click', () => button.setAttribute('aria-pressed', 'false'));
+    const player = { setOption: vi.fn(), unloadModule: vi.fn() };
+    await restoreSavedCaptionState(
+      player,
+      document,
+      { buttonPressed: false, windowVisible: false, track: { languageCode: 'en' } },
+      async () => undefined,
+    );
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(player.unloadModule).toHaveBeenCalledWith('captions');
   });
 
   it('clicks the button off until aria-pressed is false', async () => {

@@ -13,6 +13,7 @@ import { FALLBACK_SLEW_SEC, INTRO_SLEW_SEC, SEEK_SNAP_SEC } from '../settings/li
 import type { DynamicSpeedSettings } from '../settings/schema';
 import { speedCalculationChanged } from '../settings/diff';
 import { resolveForPage, type ResolvedPlaybackSettings } from '../settings/resolve';
+import { wpmAdjustmentsActive } from '../pacing/wpm-calibration';
 import type { WordToken } from '../transcript/types';
 import { isAdShowing, findMainVideo } from './ads';
 import {
@@ -293,6 +294,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
       return;
     }
     const spoken = curve && video ? wpmAt(curve, video.currentTime) : null;
+    const wpmUnit = current && wpmAdjustmentsActive(current) ? 'adjusted WPM' : 'WPM';
     const conflict = speedConflict.isActive();
     const inactive =
       !current.automationAllowed ||
@@ -301,7 +303,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
     const titleParts = [
       'DynamicSpeed for YouTube',
       `Target ${current.targetWpm} WPM`,
-      spoken ? `Speech ~${Math.round(spoken)} WPM` : `Captions: ${transcriptStatus}`,
+      spoken ? `Speech ~${Math.round(spoken)} ${wpmUnit}` : `Captions: ${transcriptStatus}`,
       current.blockReason ? `Paused: ${current.blockReason}` : '',
       mode ? `Mode: ${mode}` : '',
       conflict

@@ -7,6 +7,7 @@ import { SupportLink } from '../../ui/components/SupportLink';
 import { Toggle } from '../../ui/components/Toggle';
 import { useSettings } from '../../ui/hooks/useSettings';
 import { LIMITS } from '../../lib/settings/limits';
+import { wpmAdjustmentsActive } from '../../lib/pacing/wpm-calibration';
 import {
   EMPTY_PAGE_STATE,
   RUNTIME_SOURCE,
@@ -87,6 +88,7 @@ export function PopupApp() {
   const videoDisabled = Boolean(
     page.videoId && settings.disabledVideoIds.includes(page.videoId),
   );
+  const wpmUnit = wpmAdjustmentsActive(settings) ? 'adjusted WPM' : 'WPM';
 
   return (
     <div className="w-[340px] overflow-hidden bg-ds-bg px-3 py-2 text-ds-text">
@@ -135,7 +137,7 @@ export function PopupApp() {
               {page.playbackRate != null ? `${page.playbackRate.toFixed(2)}×` : '—'}
             </span>
             <span className="text-ds-muted">
-              {page.spokenWpm ? `${Math.round(page.spokenWpm)} WPM` : page.transcriptStatus}
+              {page.spokenWpm ? `${Math.round(page.spokenWpm)} ${wpmUnit}` : page.transcriptStatus}
             </span>
           </div>
         </div>

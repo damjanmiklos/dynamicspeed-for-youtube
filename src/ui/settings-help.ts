@@ -15,8 +15,8 @@ export const SETTINGS_HELP = {
   targetWpm: {
     label: 'About Target WPM',
     body: [
-      'This is the listening pace you want, in words per minute. DynamicSpeed measures how fast the speaker is talking from caption timings, then sets playback rate ≈ spoken WPM ÷ target WPM (then clamped to Min/Max speed).',
-      'Raise the target if you want slow talkers sped up more. Lower it if dense or fast speech still feels rushed. Everyday conversation is often about 150–180 WPM; lectures are slower; auction-style or hyped speech is faster.',
+      'This is the listening pace you want, in words per minute. DynamicSpeed measures how fast the speaker is talking from caption timings, then sets playback rate ≈ target WPM ÷ spoken WPM (then clamped to Min/Max speed).',
+      'Syllable weighting, jargon compensation, and spoken-time compensation change how pace is estimated, then a constant scale for those slider values is divided back out so this number still means ordinary WPM — not an inflated internal score. Everyday conversation is often about 150–180 WPM; lectures are slower; auction-style or hyped speech is faster.',
       'The range is 80–500. Changes apply on the current video immediately, with a short ease-in so the jump is not a hard snap.',
     ],
   },
@@ -56,7 +56,7 @@ export const SETTINGS_HELP = {
     label: 'About temporarily turning on captions',
     body: [
       'When this is on, DynamicSpeed may briefly turn on YouTube’s own captions so the player downloads timed caption data with a valid token. That download is copied in the background, then captions are put back to whatever you had before — on or off.',
-      'If you had captions off, the on-screen text is hidden during the grab so it is only a short flash, if anything. If you already had captions on, they stay on.',
+      'If you had captions off, the on-screen text is hidden during the grab so it is only a short flash, if anything. A leftover selected caption language is not treated as “you wanted captions on.” If you already had captions on, they stay on.',
       'Turn this off to never touch YouTube’s CC button. Background-only loading is less reliable: YouTube often will not send caption timings unless captions are turned on, so the transcript (and therefore speed control) may fail to load.',
     ],
   },
@@ -80,7 +80,7 @@ export const SETTINGS_HELP = {
     label: 'About syllable-weighted WPM',
     body: [
       'When this is on, spoken pace is estimated from syllables rather than treating every caption word as equal. A word like “internationalization” counts more than “cat,” so dense speech is recognized as faster talking.',
-      'That usually slows the video a bit on technical or formal speech and speeds it less aggressively on very short, simple words. Syllables are counted locally (no network).',
+      'That usually slows the video a bit on technical or formal speech and speeds it less aggressively on very short, simple words. Syllables are counted locally (no network). A constant scale for this toggle is then divided out so Target WPM still reads as ordinary words per minute.',
       'Turn it off if you want a simpler words-per-minute model that matches how many caption tokens appear per second.',
     ],
   },
@@ -88,7 +88,7 @@ export const SETTINGS_HELP = {
     label: 'About jargon compensation',
     body: [
       'Extra weight on hard words: three or more syllables and not in Google’s 10,000 most common English words. Those tokens are multiplied by this factor when WPM is estimated.',
-      '1.00 is off. 1.15 means jargon counts 15% more, so lectures full of long technical terms are treated as slightly faster speech and the video slows a little more.',
+      '1.00 is off. 1.15 means jargon counts 15% more, so lectures full of long technical terms are treated as slightly faster speech and the video slows a little more. A constant scale for this slider is then divided out so Target WPM stays in ordinary units.',
       'The list is English-only. If the caption track is not English, jargon compensation does nothing and every word is treated as ordinary.',
     ],
   },
@@ -129,7 +129,7 @@ export const SETTINGS_HELP = {
     body: [
       'Caption timings often include short gaps after each word, especially in lists, reaction commentary, and hunt-and-peck speech. Those gaps make spoken WPM look too low, so playback speeds up and the actual words fly by.',
       'This control estimates what fraction of caption-covered time is really voiced, then raises WPM partway toward that articulation rate: adjusted WPM = measured WPM × ((1 − strength) + strength / spoken fraction). 0% is off (old behavior). 100% fully uses voiced time only. The default 40% is a partial correction.',
-      'Gaps longer than Long pause are excluded here and stay under Pauses & b-roll. A stretch with no speech at all is not boosted (the spoken fraction would be 0%).',
+      'A constant scale for the current strength (not for the current video) is then divided out so the toolbar and Target WPM stay in ordinary words-per-minute. Relative differences remain: list-like speech with short gaps still reads faster than packed speech. Gaps longer than Long pause are excluded here and stay under Pauses & b-roll.',
     ],
   },
   minChunk: {
@@ -244,7 +244,7 @@ export const SETTINGS_HELP = {
   wpmTooltip: {
     label: 'About WPM in tooltip',
     body: [
-      'When this is on, hovering the player chip shows target WPM, estimated spoken WPM from captions, caption status, and why automation might be paused.',
+      'When this is on, hovering the player chip shows target WPM, estimated spoken WPM from captions, caption status, and why automation might be paused. If syllable weighting, jargon compensation, or spoken-time compensation is on, that estimate is labeled adjusted WPM.',
       'Turn it off for a short “DynamicSpeed” tooltip only. The chip still shows the playback rate either way.',
     ],
   },

@@ -19,14 +19,19 @@ import {
   readVisibleWatchTitle,
 } from '../lib/youtube/watch-meta';
 import {
+  CAPTIONS_OFF_STATE,
+  captionStateForRestore,
   captionTrackOptionForLanguage,
   enableCaptionsForCapture,
   hideCaptionFlash,
   parseAcquireCaptionPrefs,
+  readRememberedCaptionPref,
   readSavedCaptionState,
+  rememberCaptionPrefFromUserClick,
+  resolveCaptureCaptionPref,
   restoreSavedCaptionState,
   showCaptionFlash,
-  userWantedCaptionsOn,
+  snapshotCaptionStorage,
   type CaptionPlayer,
 } from '../lib/youtube/caption-nudge';
 
@@ -580,159 +585,205 @@ async function captureViaCaptionNudge(
   prefs: { language: string; preferManual: boolean },
   signal: AbortSignal,
 ): Promise<unknown | null> {
-  return withCaptionSession(async () => {
-    const player = await waitForPlayer(signal, 2000);
-    if (!player || signal.aborted) {
-      return null;
-    }
-    const saved = readSavedCaptionState(player, document);
-    const hideFlash = !userWantedCaptionsOn(saved);
-    captureHold = true;
-    if (hideFlash) {
-      hideCaptionFlash(document);
-    }
-    const response = readPlayerResponse();
-    const resolved = captionPrefsForResponse(prefs, response);
-    const selected = selectCaptionTrack(tracksFrom(response), resolved);
-    const option = captionTrackOptionForLanguage(selected, resolved.language);
-    const languageFallbacks = uniqueUrls([
-      option.languageCode,
-      resolved.language,
-      resolved.language.includes('-')
-        ? resolved.language.slice(0, 2)
-        : `${resolved.language}-US`,
-    ]).filter((code) => code.length >= 2);
+  const player = await waitForPlayer(signal, 2000);
+  if (!player || signal.aborted) {
+    return null;
+  }
+  const saved = readSavedCaptionState(player, document);
+  const wantedOn = resolveCaptureCaptionPref(saved);
+  const hideFlash = !wantedOn;
+  const storageSnapshot = wantedOn ? undefined : snapshotCaptionStorage();
+  captureHold = true;
+  if (hideFlash) {
+    hideCaptionFlash(document);
+  }
+  const response = readPlayerResponse();
+  const resolved = captionPrefsForResponse(prefs, response);
+  const selected = selectCaptionTrack(tracksFrom(response), resolved);
+  const option = captionTrackOptionForLanguage(selected, resolved.language);
+  const languageFallbacks = uniqueUrls([
+    option.languageCode,
+    resolved.language,
+    resolved.language.includes('-')
+      ? resolved.language.slice(0, 2)
+      : `${resolved.language}-US`,
+  ]).filter((code) => code.length >= 2);
 
-    try {
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        if (signal.aborted) {
-          return null;
-        }
-        const languageCode = languageFallbacks[attempt] ?? option.languageCode;
-        await enableCaptionsForCapture(
-          player,
-          document,
-          { ...option, languageCode },
-          sleep,
-        );
-        const hit = await waitForCapture(videoId, signal, 2200 + attempt * 600);
-        if (hit) {
-          return hit;
-        }
-        const later = readPlayerResponse();
-        const afterPot = await jsonFromTracks(
-          tracksFrom(later),
-          captionPrefsForResponse(resolved, later),
-          signal,
-          2500,
-        );
-        if (afterPot) {
-          return afterPot;
-        }
+  try {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (signal.aborted) {
+        return null;
       }
-      return captureMatchesVideo(videoId);
+      const languageCode = languageFallbacks[attempt] ?? option.languageCode;
+      await enableCaptionsForCapture(
+        player,
+        document,
+        { ...option, languageCode },
+        sleep,
+      );
+      const hit = await waitForCapture(videoId, signal, 2200 + attempt * 600);
+      if (hit) {
+        return hit;
+      }
+      const later = readPlayerResponse();
+      const afterPot = await jsonFromTracks(
+        tracksFrom(later),
+        captionPrefsForResponse(resolved, later),
+        signal,
+        2500,
+      );
+      if (afterPot) {
+        return afterPot;
+      }
+    }
+    return captureMatchesVideo(videoId);
+  } finally {
+    try {
+      await restoreSavedCaptionState(
+        player,
+        document,
+        captionStateForRestore(saved, wantedOn),
+        sleep,
+        storageSnapshot,
+      );
     } finally {
       captureHold = false;
-      try {
-        await restoreSavedCaptionState(player, document, saved, sleep);
-      } finally {
-        showCaptionFlash(document);
-      }
+      showCaptionFlash(document);
     }
-  });
+  }
+}
+
+async function restoreCaptionsToUserPref(): Promise<void> {
+  if (readRememberedCaptionPref() !== false) {
+    return;
+  }
+  const player = moviePlayer();
+  if (!player) {
+    return;
+  }
+  await restoreSavedCaptionState(player, document, CAPTIONS_OFF_STATE, sleep);
 }
 
 async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> {
   fallbackAbort?.abort();
   const abort = new AbortController();
   fallbackAbort = abort;
-  const prefs = parseAcquireCaptionPrefs(payload);
-  const videoId = parseVideoId(location.href) ?? '';
-  const captured = captureMatchesVideo(videoId);
-  if (captured) {
-    return captured;
-  }
+  return withCaptionSession(async () => {
+    await restoreCaptionsToUserPref();
+    const playerForPref = moviePlayer();
+    if (playerForPref && readRememberedCaptionPref() == null) {
+      resolveCaptureCaptionPref(readSavedCaptionState(playerForPref, document));
+    }
+    const prefs = parseAcquireCaptionPrefs(payload);
+    const videoId = parseVideoId(location.href) ?? '';
+    const captured = captureMatchesVideo(videoId);
+    if (captured) {
+      return captured;
+    }
 
-  const tryResponse = async (response: PlayerResponse | null, timeoutMs = 5000) => {
+    const tryResponse = async (response: PlayerResponse | null, timeoutMs = 5000) => {
+      if (abort.signal.aborted) {
+        return null;
+      }
+      const resolved = captionPrefsForResponse(prefs, response);
+      return jsonFromTracks(tracksFrom(response), resolved, abort.signal, timeoutMs);
+    };
+
+    const playerResponse = readPlayerResponse();
+    const fromPlayer = await tryResponse(playerResponse, prefs.nudgeCaptions ? 2000 : 5000);
+    if (fromPlayer) {
+      return fromPlayer;
+    }
+
+    if (prefs.nudgeCaptions && videoId) {
+      try {
+        const nudged = await captureViaCaptionNudge(
+          videoId,
+          captionPrefsForResponse(prefs, playerResponse),
+          abort.signal,
+        );
+        if (nudged) {
+          return nudged;
+        }
+      } catch {
+        if (abort.signal.aborted) {
+          return null;
+        }
+      }
+    }
+
+    if (videoId) {
+      try {
+        const android = await innertubePlayer(videoId, 'ANDROID', abort.signal);
+        const fromAndroid = await tryResponse(android);
+        if (fromAndroid) {
+          return fromAndroid;
+        }
+      } catch {
+        if (abort.signal.aborted) {
+          return null;
+        }
+      }
+      try {
+        const web = await innertubePlayer(videoId, 'WEB', abort.signal);
+        const fromWeb = await tryResponse(web);
+        if (fromWeb) {
+          return fromWeb;
+        }
+      } catch {
+        if (abort.signal.aborted) {
+          return null;
+        }
+      }
+    }
+
     if (abort.signal.aborted) {
       return null;
     }
-    const resolved = captionPrefsForResponse(prefs, response);
-    return jsonFromTracks(tracksFrom(response), resolved, abort.signal, timeoutMs);
-  };
+    const fromDom = scrapeDomTranscript();
+    if (fromDom) {
+      return fromDom;
+    }
 
-  const playerResponse = readPlayerResponse();
-  const fromPlayer = await tryResponse(playerResponse, prefs.nudgeCaptions ? 2000 : 5000);
-  if (fromPlayer) {
-    return fromPlayer;
-  }
-
-  if (prefs.nudgeCaptions && videoId) {
-    try {
-      const nudged = await captureViaCaptionNudge(
-        videoId,
-        captionPrefsForResponse(prefs, playerResponse),
-        abort.signal,
-      );
-      if (nudged) {
-        return nudged;
-      }
-    } catch {
-      if (abort.signal.aborted) {
-        return null;
+    if (prefs.nudgeCaptions && videoId && !abort.signal.aborted) {
+      try {
+        return await captureViaCaptionNudge(
+          videoId,
+          captionPrefsForResponse(prefs, readPlayerResponse()),
+          abort.signal,
+        );
+      } catch {
+        return captureMatchesVideo(videoId);
       }
     }
-  }
-
-  if (videoId) {
-    try {
-      const android = await innertubePlayer(videoId, 'ANDROID', abort.signal);
-      const fromAndroid = await tryResponse(android);
-      if (fromAndroid) {
-        return fromAndroid;
-      }
-    } catch {
-      if (abort.signal.aborted) {
-        return null;
-      }
-    }
-    try {
-      const web = await innertubePlayer(videoId, 'WEB', abort.signal);
-      const fromWeb = await tryResponse(web);
-      if (fromWeb) {
-        return fromWeb;
-      }
-    } catch {
-      if (abort.signal.aborted) {
-        return null;
-      }
-    }
-  }
-
-  if (abort.signal.aborted) {
-    return null;
-  }
-  const fromDom = scrapeDomTranscript();
-  if (fromDom) {
-    return fromDom;
-  }
-
-  if (prefs.nudgeCaptions && videoId && !abort.signal.aborted) {
-    try {
-      return await captureViaCaptionNudge(
-        videoId,
-        captionPrefsForResponse(prefs, readPlayerResponse()),
-        abort.signal,
-      );
-    } catch {
-      return captureMatchesVideo(videoId);
-    }
-  }
-  return captureMatchesVideo(videoId);
+    return captureMatchesVideo(videoId);
+  });
 }
 
 async function acquireFallbackTranscript(payload: unknown): Promise<unknown> {
   return acquireFallbackTranscriptNow(payload);
+}
+
+function installCaptionPrefListener(): void {
+  document.addEventListener(
+    'click',
+    (event) => {
+      if (captureHold) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest('.ytp-subtitles-button')) {
+        return;
+      }
+      window.setTimeout(() => {
+        if (captureHold) {
+          return;
+        }
+        rememberCaptionPrefFromUserClick(document);
+      }, 0);
+    },
+    true,
+  );
 }
 
 export default defineContentScript({
@@ -741,6 +792,7 @@ export default defineContentScript({
   runAt: 'document_start',
   main() {
     installTimedtextObserver();
+    installCaptionPrefListener();
     listenToIsolatedRequests({
       getSnapshot() {
         return snapshotFrom(readPlayerResponse());
@@ -765,6 +817,7 @@ export default defineContentScript({
         lastCapture = null;
         lastTrackKey = '';
         emitBridgeEvent('VIDEO_ID_CHANGED', id, null);
+        void withCaptionSession(() => restoreCaptionsToUserPref());
       }
       const snapshot = snapshotFrom(readPlayerResponse());
       const videoId = snapshot.videoId ?? id;

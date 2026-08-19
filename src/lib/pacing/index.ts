@@ -27,6 +27,15 @@ export {
   SPOKEN_DUTY_WINDOW_SEC,
 } from './spoken-duty';
 export {
+  wpmAdjustmentCalibration,
+  wpmAdjustmentsActive,
+  jargonCalibration,
+  spokenDutyCalibration,
+  SYLLABLE_WEIGHTING_CALIBRATION,
+  JARGON_WEIGHT_SHARE,
+  TYPICAL_SPOKEN_DUTY_RATIO,
+} from './wpm-calibration';
+export {
   countSyllables,
   isEasyWord,
   isJargonWord,

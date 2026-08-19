@@ -17,7 +17,7 @@ export const SETTINGS_HELP = {
     body: [
       'This is the listening pace you want, in words per minute. DynamicSpeed measures how fast the speaker is talking from caption timings, then sets playback rate ≈ target WPM ÷ spoken WPM (then clamped to Min/Max speed).',
       'Syllable weighting, jargon compensation, and spoken-time compensation change how pace is estimated, then a constant scale for those slider values is divided back out so this number still means ordinary WPM — not an inflated internal score. Everyday conversation is often about 150–180 WPM; lectures are slower; auction-style or hyped speech is faster.',
-      'The range is 80–500. Changes apply on the current video immediately, with a short ease-in so the jump is not a hard snap.',
+      'The range is 80–800. Changes apply on the current video immediately, with a short ease-in so the jump is not a hard snap.',
     ],
   },
   minSpeed: {
@@ -265,7 +265,7 @@ export const SETTINGS_HELP = {
   wpmUpShortcut: {
     label: 'About WPM up',
     body: [
-      'Alt+Shift+W raises Target WPM by 10, clamped to the allowed range (80–500). The speed curve rebuilds immediately on the current video.',
+      'Alt+Shift+W raises Target WPM by 10, clamped to the allowed range (80–800). The speed curve rebuilds immediately on the current video.',
     ],
   },
   wpmDownShortcut: {

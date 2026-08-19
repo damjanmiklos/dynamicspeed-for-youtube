@@ -1,5 +1,5 @@
 export const LIMITS = {
-  targetWpm: { min: 80, max: 500, step: 1, decimals: 0 },
+  targetWpm: { min: 80, max: 800, step: 1, decimals: 0 },
   minSpeed: { min: 0.25, max: 4, step: 0.05, decimals: 2 },
   maxSpeed: { min: 0.5, max: 5, step: 0.05, decimals: 2 },
   fallbackSpeed: { min: 0.25, max: 5, step: 0.05, decimals: 2 },

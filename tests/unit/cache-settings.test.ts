@@ -143,6 +143,7 @@ describe('settings schema', () => {
     expect(settings.minChunkSec).toBe(0.1);
     expect(settings.spokenDutyStrength).toBe(0.4);
     expect(settings.preferManualCaptions).toBe(false);
+    expect(settings.syllableWeighting).toBe(false);
     expect(settings.captionLanguage).toBe('auto');
     expect(settings.expireCaptionCacheAfterWeek).toBe(true);
     expect(settings.temporarilyEnableCaptions).toBe(true);
@@ -169,6 +170,15 @@ describe('settings schema', () => {
     expect(pinnedEnglish.captionLanguage).toBe('en');
     const german = migrateSettings({ version: 3, captionLanguage: 'de' });
     expect(german.captionLanguage).toBe('de');
+  });
+
+  it('migrates the old syllable-weighting default off', () => {
+    const fromDefault = migrateSettings({ version: 4, syllableWeighting: true });
+    expect(fromDefault.syllableWeighting).toBe(false);
+    const keptOff = migrateSettings({ version: 4, syllableWeighting: false });
+    expect(keptOff.syllableWeighting).toBe(false);
+    const reenabled = migrateSettings({ version: 5, syllableWeighting: true });
+    expect(reenabled.syllableWeighting).toBe(true);
   });
 
   it('rejects inverted speeds by repairing them', () => {

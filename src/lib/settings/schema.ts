@@ -10,7 +10,7 @@ export const ChannelOverrideSchema = z.object({
 
 export const DynamicSpeedSettingsSchema = z
   .object({
-    version: z.number().default(4),
+    version: z.number().default(5),
     enabled: z.boolean().default(true),
     targetWpm: z.number().min(LIMITS.targetWpm.min).max(LIMITS.targetWpm.max).default(165),
     minSpeed: z.number().min(LIMITS.minSpeed.min).max(LIMITS.minSpeed.max).default(0.75),
@@ -27,7 +27,7 @@ export const DynamicSpeedSettingsSchema = z
     medianWindowSec: z.number().min(1).max(15).default(5),
     slewRateLimit: z.number().min(0.05).max(2).default(0.3),
 
-    syllableWeighting: z.boolean().default(true),
+    syllableWeighting: z.boolean().default(false),
     jargonCompensation: z.number().min(1).max(1.5).default(1.15),
     minChunkSec: z.number().min(0.1).max(1).default(0.1),
     spokenDutyStrength: z.number().min(0).max(1).default(0.4),
@@ -78,4 +78,4 @@ export type DynamicSpeedSettings = z.infer<typeof DynamicSpeedSettingsSchema>;
 export const SETTINGS_STORAGE_KEY = 'ds.settings';
 /** Bump when parsed token timings change so stale caption caches are dropped. */
 export const TRANSCRIPT_CACHE_KEY = 'ds.transcriptCache.v4';
-export const SETTINGS_VERSION = 4;
+export const SETTINGS_VERSION = 5;

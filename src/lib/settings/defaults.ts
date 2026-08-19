@@ -81,6 +81,11 @@ export function migrateSettings(input: unknown): DynamicSpeedSettings {
   if (previousVersion < 4 && source.captionLanguage === 'en') {
     source.captionLanguage = 'auto';
   }
+  // v4 and earlier defaulted syllable weighting on. Word-count WPM matches
+  // caption timings more faithfully; the old default is no longer recommended.
+  if (previousVersion < 5 && source.syllableWeighting === true) {
+    source.syllableWeighting = false;
+  }
   source.version = Math.max(previousVersion, SETTINGS_VERSION);
   return parseSettings(source);
 }

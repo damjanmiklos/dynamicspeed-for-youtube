@@ -352,7 +352,7 @@ export function OptionsApp() {
               </p>
               <Row
                 title="Syllable-weighted WPM"
-                hint="Count syllables instead of raw words so dense speech is not treated as slow."
+                hint="Not recommended. Count syllables instead of raw words so dense speech is not treated as slow."
                 help={SETTINGS_HELP.syllableWeighting}
               >
                 <div className="flex justify-end">

@@ -33,6 +33,7 @@ describe('caption nudge helpers', () => {
   beforeEach(() => {
     sessionStorage.clear();
     localStorage.clear();
+    showCaptionFlash(document);
   });
 
   it('reads the CC button and restores off without a second click when already off', async () => {
@@ -167,7 +168,28 @@ describe('caption nudge helpers', () => {
   it('installs and removes the flash-hiding style', () => {
     hideCaptionFlash(document);
     expect(document.getElementById('ds-hide-caption-flash')).toBeTruthy();
+    expect(document.documentElement.hasAttribute('data-ds-hide-captions')).toBe(true);
     showCaptionFlash(document);
+    expect(document.getElementById('ds-hide-caption-flash')).toBeNull();
+    expect(document.documentElement.hasAttribute('data-ds-hide-captions')).toBe(false);
+  });
+
+  it('keeps the hide style until captions are actually turned off', async () => {
+    hideCaptionFlash(document);
+    let hiddenWhileUnloading = false;
+    const player = {
+      setOption: vi.fn(),
+      unloadModule: vi.fn(() => {
+        hiddenWhileUnloading = Boolean(document.getElementById('ds-hide-caption-flash'));
+      }),
+    };
+    await restoreSavedCaptionState(
+      player,
+      document,
+      { buttonPressed: false, windowVisible: false, track: null },
+      async () => undefined,
+    );
+    expect(hiddenWhileUnloading).toBe(true);
     expect(document.getElementById('ds-hide-caption-flash')).toBeNull();
   });
 });

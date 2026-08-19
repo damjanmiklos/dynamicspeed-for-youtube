@@ -24,6 +24,7 @@ export const CAPTIONS_OFF_STATE: SavedCaptionState = {
 };
 
 const FLASH_STYLE_ID = 'ds-hide-caption-flash';
+const HIDE_CAPTIONS_ATTR = 'data-ds-hide-captions';
 const USER_CAPTION_PREF_KEY = 'ds.user-captions-wanted';
 const CAPTION_STORAGE_KEYS = [
   'yt-player-caption-display-mode',
@@ -204,17 +205,37 @@ export function restoreCaptionStorage(snapshot: Record<string, string | null>): 
 }
 
 export function hideCaptionFlash(root: Document): void {
+  root.documentElement.setAttribute(HIDE_CAPTIONS_ATTR, '');
   if (root.getElementById(FLASH_STYLE_ID)) {
     return;
   }
   const style = root.createElement('style');
   style.id = FLASH_STYLE_ID;
-  style.textContent =
-    '.ytp-caption-window-container,.caption-window,.ytp-caption-segment,.captions-text{opacity:0!important;visibility:hidden!important;}';
+  // Keep the overlay off-screen until CC is restored. clip-path still hides
+  // if YouTube later sets opacity without !important. The CC button still
+  // goes “on”; that is the control, not the caption text.
+  style.textContent = `
+html[${HIDE_CAPTIONS_ATTR}] .ytp-caption-window-container,
+html[${HIDE_CAPTIONS_ATTR}] .ytp-caption-window-container *,
+html[${HIDE_CAPTIONS_ATTR}] .caption-window,
+html[${HIDE_CAPTIONS_ATTR}] .caption-window *,
+html[${HIDE_CAPTIONS_ATTR}] [id^="caption-window"],
+html[${HIDE_CAPTIONS_ATTR}] .ytp-caption-segment,
+html[${HIDE_CAPTIONS_ATTR}] .captions-text,
+html[${HIDE_CAPTIONS_ATTR}] .caption-visual-line,
+html[${HIDE_CAPTIONS_ATTR}] .ytp-caption-window-rollup,
+html[${HIDE_CAPTIONS_ATTR}] .ytp-caption-window-bottom {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  clip-path: inset(50%) !important;
+}
+`.trim();
   root.documentElement.appendChild(style);
 }
 
 export function showCaptionFlash(root: Document): void {
+  root.documentElement.removeAttribute(HIDE_CAPTIONS_ATTR);
   root.getElementById(FLASH_STYLE_ID)?.remove();
 }
 
@@ -283,8 +304,8 @@ export async function restoreSavedCaptionState(
   sleep: (ms: number) => Promise<void>,
   storageSnapshot?: Record<string, string | null>,
 ): Promise<void> {
-  showCaptionFlash(root);
   if (userWantedCaptionsOn(saved)) {
+    showCaptionFlash(root);
     try {
       player?.loadModule?.('captions');
     } catch {
@@ -303,15 +324,19 @@ export async function restoreSavedCaptionState(
     return;
   }
 
-  await disableCaptionsDisplay(player, root, sleep);
-  if (storageSnapshot) {
-    restoreCaptionStorage(storageSnapshot);
-  }
-  await sleep(160);
-  if (isSubtitlesButtonPressed(root) || captionWindowPresent(root)) {
+  try {
     await disableCaptionsDisplay(player, root, sleep);
     if (storageSnapshot) {
       restoreCaptionStorage(storageSnapshot);
     }
+    await sleep(160);
+    if (isSubtitlesButtonPressed(root) || captionWindowPresent(root)) {
+      await disableCaptionsDisplay(player, root, sleep);
+      if (storageSnapshot) {
+        restoreCaptionStorage(storageSnapshot);
+      }
+    }
+  } finally {
+    showCaptionFlash(root);
   }
 }

@@ -3,11 +3,14 @@ import type { CaptionTrackPayload, PlayerSnapshot } from '../lib/bridge/protocol
 import {
   bindTimedTextToVideo,
   potFromYouTubeUrl,
+  rankCaptionTracks,
   selectCaptionTrack,
+  captionTrackDisplayName,
   toSafeTimedTextUrl,
   videoIdFromTimedTextUrl,
   withTimedTextPot,
 } from '../lib/transcript/select-track';
+import { json3LooksLikeAnimationFrames } from '../lib/transcript/animation-frames';
 import {
   resolveCaptionLanguage,
   spokenLanguageFromCaptionList,
@@ -60,7 +63,8 @@ type PlayerResponse = {
         languageCode?: string;
         kind?: string;
         vssId?: string;
-        name?: { simpleText?: string };
+        trackName?: string;
+        name?: { simpleText?: string; runs?: Array<{ text?: string }> };
       }>;
       audioTracks?: Array<{
         captionTrackIndices?: number[];
@@ -133,7 +137,7 @@ function tracksFrom(response: PlayerResponse | null): CaptionTrackPayload[] {
     allowed.push({
       baseUrl,
       languageCode: track.languageCode ?? 'en',
-      languageName: track.name?.simpleText,
+      languageName: captionTrackDisplayName(track),
       kind: track.kind,
       vssId: track.vssId,
     });
@@ -203,7 +207,7 @@ function readYtcfg(key: string): string | null {
 
 /** Public Android player client string, not a secret. WEB version on ANDROID often fails. */
 const ANDROID_INNERTUBE_VERSION = '19.47.7';
-const MAX_TRACK_ATTEMPTS = 2;
+const MAX_TRACK_ATTEMPTS = 4;
 
 async function innertubePlayer(
   videoId: string,
@@ -506,11 +510,7 @@ function rankTracks(
   tracks: CaptionTrackPayload[],
   prefs: { language: string; preferManual: boolean },
 ): CaptionTrackPayload[] {
-  const selected = selectCaptionTrack(tracks, prefs);
-  if (!selected) {
-    return tracks;
-  }
-  return [selected, ...tracks.filter((track) => track.baseUrl !== selected.baseUrl)];
+  return rankCaptionTracks(tracks, prefs);
 }
 
 async function jsonFromTracks(
@@ -519,16 +519,23 @@ async function jsonFromTracks(
   signal?: AbortSignal,
   timeoutMs = 5000,
 ): Promise<unknown | null> {
-  for (const track of rankTracks(tracks, prefs).slice(0, MAX_TRACK_ATTEMPTS)) {
+  const ranked = rankTracks(tracks, prefs).slice(0, MAX_TRACK_ATTEMPTS);
+  let animatedFallback: unknown | null = null;
+  for (const track of ranked) {
     if (signal?.aborted) {
       return null;
     }
     const json = await fetchAllowlistedTimedText(track.baseUrl, signal, timeoutMs);
-    if (json) {
-      return json;
+    if (!json) {
+      continue;
     }
+    if (json3LooksLikeAnimationFrames(json)) {
+      animatedFallback ??= json;
+      continue;
+    }
+    return json;
   }
-  return null;
+  return animatedFallback;
 }
 
 async function waitForPlayer(signal: AbortSignal, timeoutMs: number): Promise<YTPlayer | null> {
@@ -631,7 +638,7 @@ async function captureViaCaptionNudge(
         }
       }
       const hit = await waitForCapture(videoId, signal, 2200 + attempt * 600);
-      if (hit) {
+      if (hit && !json3LooksLikeAnimationFrames(hit)) {
         return hit;
       }
       const later = readPlayerResponse();
@@ -689,7 +696,7 @@ async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> 
     }
     const videoId = parseVideoId(location.href) ?? '';
     const captured = captureMatchesVideo(videoId);
-    if (captured) {
+    if (captured && !json3LooksLikeAnimationFrames(captured)) {
       await restoreCaptionsToUserPref();
       return captured;
     }

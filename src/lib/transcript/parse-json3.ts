@@ -4,7 +4,7 @@ import {
   tokensFromTimedWords,
   type AlignOptions,
 } from './align';
-import { deoverlapTokenTimes, stripRollingCueDuplicates } from './deoverlap';
+import { deoverlapTokenTimes, stripRollingCueDuplicates, collapseRedrawCues } from './deoverlap';
 import { MAX_CAPTION_BYTES, MAX_JSON3_EVENTS, MAX_TOKENS, MAX_WORD_CHARS } from './limits';
 import type { Json3Document, Json3Event, TimedCue, WordToken } from './types';
 
@@ -33,7 +33,10 @@ function cueFromEvent(event: Json3Event): TimedCue | null {
 
   const words: TimedCue['words'] = [];
   for (const seg of segs) {
-    const piece = decodeHtmlEntities(seg.utf8 ?? '').replace(/\n/g, ' ').trim();
+    const piece = decodeHtmlEntities(seg.utf8 ?? '')
+      .replace(/\u200b/g, '')
+      .replace(/\n/g, ' ')
+      .trim();
     if (!piece) {
       continue;
     }
@@ -98,6 +101,7 @@ export function parseJson3(
     }
   }
   cues.sort((a, b) => a.t0 - b.t0 || a.t1 - b.t1);
+  collapseRedrawCues(cues);
   stripRollingCueDuplicates(cues);
   assignEndTimes(cues);
 

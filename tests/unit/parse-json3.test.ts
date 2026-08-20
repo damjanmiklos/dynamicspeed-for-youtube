@@ -147,4 +147,42 @@ describe('parseJson3', () => {
       expect(tokens[i].t1).toBeGreaterThan(tokens[i].t0);
     }
   });
+
+  it('counts an animated karaoke line once instead of once per redraw', () => {
+    const line = 'YouTube will soon be making a weird update';
+    const events = Array.from({ length: 20 }, (_, index) => ({
+      tStartMs: index * 50,
+      dDurationMs: 50,
+      segs: [{ utf8: index % 2 === 0 ? `${line}\u200b` : line }],
+    }));
+    const tokens = parseJson3({ events }, { syllableWeighting: false }).filter(
+      (token) => !token.meta,
+    );
+    expect(tokens.map((token) => token.text)).toEqual(line.split(' '));
+    expect(tokens[0]?.t0).toBeCloseTo(0, 5);
+    expect(tokens.at(-1)?.t1).toBeCloseTo(1, 5);
+  });
+
+  it('grows a karaoke reveal without repeating the prefix', () => {
+    const words = ['YouTube', 'will', 'soon', 'be', 'making'];
+    const events = [];
+    for (let count = 1; count <= words.length; count += 1) {
+      events.push({
+        tStartMs: (count - 1) * 50,
+        dDurationMs: 50,
+        segs: [{ utf8: words.slice(0, count).join(' ') }],
+      });
+    }
+    for (let hold = 0; hold < 8; hold += 1) {
+      events.push({
+        tStartMs: words.length * 50 + hold * 50,
+        dDurationMs: 50,
+        segs: [{ utf8: words.join(' ') }],
+      });
+    }
+    const tokens = parseJson3({ events }, { syllableWeighting: false }).filter(
+      (token) => !token.meta,
+    );
+    expect(tokens.map((token) => token.text)).toEqual(words);
+  });
 });

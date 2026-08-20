@@ -6,6 +6,8 @@ const MIN_DURATION_SEC = 1e-4;
 const MIN_OVERLAP_SEC = 0.08;
 const MIN_ROLLING_WORDS = 2;
 const ROLLING_LOOKAHEAD = 6;
+/** Animated tracks emit a new frame every few dozen ms; normal cues start ~1s+ apart. */
+const ANIMATED_REDRAW_ONSET_SEC = 0.4;
 
 function cueWordKey(text: string): string {
   return normalizeLexeme(text) || text.trim().toLowerCase();
@@ -36,6 +38,45 @@ function letterCount(keys: string[], start: number, count: number): number {
   return letters;
 }
 
+function keysEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let i = 0; i < left.length; i += 1) {
+    if (left[i] !== right[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function keysHavePrefix(full: string[], prefix: string[]): boolean {
+  if (prefix.length === 0 || prefix.length >= full.length) {
+    return false;
+  }
+  for (let i = 0; i < prefix.length; i += 1) {
+    if (full[i] !== prefix[i]) {
+      return false;
+    }
+  }
+  return letterCount(prefix, 0, prefix.length) >= 1;
+}
+
+function markCueUntimed(cue: TimedCue): void {
+  for (const word of cue.words) {
+    word.hasOffset = false;
+    word.t0 = undefined;
+    word.t1 = undefined;
+  }
+}
+
+function dropEmptyCueWords(cue: TimedCue): void {
+  cue.words = cue.words.filter((word) => {
+    const stripped = word.text.replace(/\u200b/g, '').trim();
+    return stripped.length > 0 && cueWordKey(stripped).length > 0;
+  });
+}
+
 /** Longest suffix of `prev` that is a prefix of `next`, or 0 if too weak to trust. */
 export function rollingOverlapLength(prev: string[], next: string[]): number {
   const max = Math.min(prev.length, next.length);
@@ -52,6 +93,66 @@ export function rollingOverlapLength(prev: string[], next: string[]): number {
     }
   }
   return 0;
+}
+
+/**
+ * YouTube Animated / karaoke tracks redraw the visible line every few dozen
+ * milliseconds. Collapse identical and growing frames so each word is counted
+ * once. Normal caption onsets are ~1s+ apart, so those are left alone.
+ */
+export function collapseRedrawCues(cues: TimedCue[]): void {
+  for (const cue of cues) {
+    dropEmptyCueWords(cue);
+  }
+  const keys: string[][] = cues.map((cue) =>
+    cue.words.map((word) => cueWordKey(word.text)),
+  );
+
+  let last = -1;
+  let lastFull: string[] | null = null;
+  let lastOnset = Number.NEGATIVE_INFINITY;
+  for (let index = 0; index < cues.length; index += 1) {
+    const cue = cues[index];
+    if (isMetaCue(cue) || cue.words.length === 0) {
+      continue;
+    }
+    const current = keys[index];
+    if (
+      last >= 0 &&
+      lastFull &&
+      cue.t0 - lastOnset <= ANIMATED_REDRAW_ONSET_SEC
+    ) {
+      if (keysEqual(lastFull, current)) {
+        cues[last].t1 = Math.max(cues[last].t1, cue.t1);
+        markCueUntimed(cues[last]);
+        cue.words = [];
+        keys[index] = [];
+        lastOnset = cue.t0;
+        continue;
+      }
+      if (keysHavePrefix(current, lastFull)) {
+        const prefix = lastFull.length;
+        cue.words = cue.words.slice(prefix);
+        keys[index] = current.slice(prefix);
+        lastFull = current;
+        last = index;
+        lastOnset = cue.t0;
+        continue;
+      }
+      const overlap = rollingOverlapLength(lastFull, current);
+      if (overlap > 0) {
+        cue.words = cue.words.slice(overlap);
+        keys[index] = current.slice(overlap);
+        lastFull = current;
+        last = index;
+        lastOnset = cue.t0;
+        continue;
+      }
+    }
+    lastFull = current;
+    last = index;
+    lastOnset = cue.t0;
+  }
 }
 
 /**

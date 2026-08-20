@@ -22,6 +22,9 @@ import {
   forceJson3Url,
   potFromYouTubeUrl,
   selectCaptionTrack,
+  cacheTrackKind,
+  rankCaptionTracks,
+  captionTrackDisplayName,
   timedTextBelongsToVideo,
   toSafeTimedTextUrl,
   videoIdFromTimedTextUrl,
@@ -382,6 +385,48 @@ describe('caption URL + track pick', () => {
       { language: 'en', preferManual: true },
     );
     expect(track?.baseUrl).toBe('c');
+  });
+
+  it('never prefers Animated karaoke tracks over Standard or ASR', () => {
+    const tracks = [
+      {
+        baseUrl: 'anim',
+        languageCode: 'en',
+        languageName: 'English - Animated',
+        vssId: '.en',
+      },
+      {
+        baseUrl: 'std',
+        languageCode: 'en',
+        languageName: 'English - Standard',
+        vssId: '.en',
+      },
+      { baseUrl: 'asr', languageCode: 'en', kind: 'asr', vssId: 'a.en' },
+    ];
+    expect(
+      rankCaptionTracks(tracks, { language: 'en', preferManual: false }).map(
+        (track) => track.baseUrl,
+      ),
+    ).toEqual(['asr', 'std', 'anim']);
+    expect(
+      selectCaptionTrack(tracks, { language: 'en', preferManual: true })?.baseUrl,
+    ).toBe('std');
+    expect(cacheTrackKind(tracks[0])).toBe('animated');
+    expect(cacheTrackKind(tracks[1])).toBe('standard');
+    expect(cacheTrackKind(tracks[2])).toBe('asr');
+  });
+
+  it('reads Animated from either simpleText or runs', () => {
+    expect(
+      captionTrackDisplayName({
+        name: { simpleText: 'English - Animated' },
+      }),
+    ).toBe('English - Animated');
+    expect(
+      captionTrackDisplayName({
+        name: { runs: [{ text: 'English' }, { text: ' - Animated' }] },
+      }),
+    ).toBe('English - Animated');
   });
 });
 

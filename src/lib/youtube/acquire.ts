@@ -1,7 +1,7 @@
 import { requestFromMain } from '../bridge/isolated';
 import type { PlayerSnapshot } from '../bridge/protocol';
 import { parseJson3Safe } from '../transcript/parse-json3';
-import { bindTimedTextToVideo, selectCaptionTrack } from '../transcript/select-track';
+import { bindTimedTextToVideo, cacheTrackKind, selectCaptionTrack } from '../transcript/select-track';
 import {
   resolveCaptionLanguage,
   spokenLanguageFromCaptionList,
@@ -150,7 +150,7 @@ export async function acquireTranscript(
     const cached = await recallTokens({
       videoId: trustedId,
       language: track.languageCode,
-      trackKind: track.kind ?? 'asr',
+      trackKind: cacheTrackKind(track),
     });
     throwIfAborted(signal);
     if (cached && cached.length > 0 && cached.length <= MAX_TOKENS) {
@@ -180,7 +180,7 @@ export async function acquireTranscript(
       {
         videoId: trustedId,
         language: track?.languageCode ?? language,
-        trackKind: track?.kind ?? 'asr',
+        trackKind: cacheTrackKind(track),
       },
       capturedTokens,
     );

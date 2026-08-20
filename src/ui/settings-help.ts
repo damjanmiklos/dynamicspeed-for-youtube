@@ -209,6 +209,7 @@ export const SETTINGS_HELP = {
     body: [
       'When this is on, creator-uploaded caption tracks are preferred over auto-generated (ASR) tracks in the same language. The default is off, because auto-captions usually have tighter word timings for WPM.',
       'Manual captions often have cleaner wording. Auto-captions often have tighter word-level timings, which can make WPM estimation more faithful to how the person actually spoke.',
+      'Animated / karaoke tracks (English - Animated and similar) are never preferred: they redraw the same line many times a second, which wrecks WPM. Standard or auto-generated tracks in the same language are used instead.',
       'If the preferred kind is missing, the other kind is still used. Pair this with Caption language to pick the right track.',
     ],
   },

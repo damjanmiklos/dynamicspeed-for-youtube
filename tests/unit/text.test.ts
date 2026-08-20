@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isMetaText } from '../../src/lib/transcript/text';
+import { isMetaText, splitWords } from '../../src/lib/transcript/text';
 
 describe('isMetaText', () => {
   it('keeps ordinary words and the word Music as speech', () => {
@@ -18,5 +18,12 @@ describe('isMetaText', () => {
     expect(isMetaText('*Intro')).toBe(true);
     expect(isMetaText('Music*')).toBe(true);
     expect(isMetaText('*Outro')).toBe(true);
+  });
+});
+
+describe('splitWords', () => {
+  it('drops zero-width karaoke markers', () => {
+    expect(splitWords('YouTube will \u200b soon')).toEqual(['YouTube', 'will', 'soon']);
+    expect(splitWords('\u200b')).toEqual([]);
   });
 });

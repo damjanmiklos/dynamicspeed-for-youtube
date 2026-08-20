@@ -1,5 +1,6 @@
 import type { CaptionTrack } from './types';
 import { isEnglishLanguageCode } from '../pacing/syllables';
+import { isAsrCaptionTrack } from './spoken-language';
 import { isAllowedYouTubeHost } from '../youtube/video-id';
 
 export function isAllowedTimedTextUrl(
@@ -149,34 +150,107 @@ export function withTimedTextPot(
   return toSafeTimedTextUrl(url.toString(), origin);
 }
 
+function trackLabel(track: Pick<CaptionTrack, 'languageName' | 'vssId'>): string {
+  return `${track.languageName ?? ''} ${track.vssId ?? ''}`.toLowerCase();
+}
+
+export function captionTrackDisplayName(track: {
+  languageName?: string;
+  trackName?: string;
+  name?: { simpleText?: string; runs?: Array<{ text?: string }> };
+}): string | undefined {
+  const fromRuns = track.name?.runs?.map((run) => run.text ?? '').join('') ?? '';
+  for (const raw of [track.languageName, track.trackName, track.name?.simpleText, fromRuns]) {
+    const text = raw?.trim();
+    if (text) {
+      return text.slice(0, 80);
+    }
+  }
+  return undefined;
+}
+
+/** YouTube "English - Animated" (and similar) karaoke/kinetic tracks. */
+export function isAnimatedCaptionTrack(
+  track: Pick<CaptionTrack, 'languageName' | 'vssId'> | null | undefined,
+): boolean {
+  if (!track) {
+    return false;
+  }
+  return trackLabel(track).includes('animated');
+}
+
+export function isStandardCaptionTrack(
+  track: Pick<CaptionTrack, 'languageName' | 'vssId'> | null | undefined,
+): boolean {
+  if (!track) {
+    return false;
+  }
+  const label = trackLabel(track);
+  return label.includes('standard') && !label.includes('animated');
+}
+
+/** Cache slice so Animated / Standard / ASR for the same language do not collide. */
+export function cacheTrackKind(
+  track: Pick<CaptionTrack, 'kind' | 'languageName' | 'vssId'> | null | undefined,
+): string {
+  if (!track) {
+    return 'asr';
+  }
+  if (isAsrCaptionTrack(track)) {
+    return 'asr';
+  }
+  if (isAnimatedCaptionTrack(track)) {
+    return 'animated';
+  }
+  if (isStandardCaptionTrack(track)) {
+    return 'standard';
+  }
+  const vss = (track.vssId ?? '').toLowerCase().replace(/[^a-z0-9._-]+/g, '').slice(0, 24);
+  return vss || 'manual';
+}
+
+function captionTrackScore(
+  track: CaptionTrack,
+  options: { language: string; preferManual: boolean },
+): number {
+  const language = options.language.toLowerCase();
+  const code = track.languageCode?.toLowerCase() ?? '';
+  const languageMatches = code === language || code.startsWith(`${language}-`);
+  const asr = isAsrCaptionTrack(track);
+  const animated = isAnimatedCaptionTrack(track);
+  const standard = isStandardCaptionTrack(track);
+  let value = 0;
+  if (languageMatches) value += 8;
+  if (animated) {
+    value -= 6;
+  } else if (options.preferManual && !asr) {
+    value += 4;
+    if (standard) value += 2;
+  } else if (!options.preferManual && asr) {
+    value += 3;
+  } else if (!options.preferManual && !asr) {
+    value += 1;
+    if (standard) value += 1;
+  }
+  if (code.startsWith('en')) value += 1;
+  return value;
+}
+
+export function rankCaptionTracks(
+  tracks: CaptionTrack[],
+  options: { language: string; preferManual: boolean },
+): CaptionTrack[] {
+  return tracks
+    .map((track, index) => ({ track, index, score: captionTrackScore(track, options) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((item) => item.track);
+}
+
 export function selectCaptionTrack(
   tracks: CaptionTrack[],
   options: { language: string; preferManual: boolean },
 ): CaptionTrack | null {
-  if (tracks.length === 0) {
-    return null;
-  }
-
-  const language = options.language.toLowerCase();
-  const languageMatches = (track: CaptionTrack) => {
-    const code = track.languageCode?.toLowerCase() ?? '';
-    return code === language || code.startsWith(`${language}-`);
-  };
-  const isManual = (track: CaptionTrack) => track.kind !== 'asr';
-
-  const ranked = [...tracks].sort((a, b) => {
-    const score = (track: CaptionTrack) => {
-      let value = 0;
-      if (languageMatches(track)) value += 8;
-      if (options.preferManual && isManual(track)) value += 4;
-      if (!options.preferManual && !isManual(track)) value += 2;
-      if (track.languageCode?.toLowerCase().startsWith('en')) value += 1;
-      return value;
-    };
-    return score(b) - score(a);
-  });
-
-  return ranked[0] ?? null;
+  return rankCaptionTracks(tracks, options)[0] ?? null;
 }
 
 export function isEnglishTrack(track: CaptionTrack | null): boolean {

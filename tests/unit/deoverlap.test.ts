@@ -3,6 +3,7 @@ import {
   deoverlapTokenTimes,
   rollingOverlapLength,
   stripRollingCueDuplicates,
+  collapseRedrawCues,
 } from '../../src/lib/transcript/deoverlap';
 import type { TimedCue, WordToken } from '../../src/lib/transcript/types';
 
@@ -130,6 +131,63 @@ describe('stripRollingCueDuplicates', () => {
     expect(cues[0].t1).toBeCloseTo(4, 8);
     expect(cues[1].t0).toBeCloseTo(2, 8);
     expect(cues[1].t1).toBeCloseTo(6, 8);
+  });
+});
+
+describe('collapseRedrawCues', () => {
+  it('merges identical rapid redraw frames into one cue', () => {
+    const line = ['YouTube', 'will', 'soon', 'be', 'making'];
+    const cues = Array.from({ length: 12 }, (_, index) =>
+      cue(index * 0.05, index * 0.05 + 0.05, line, undefined, false),
+    );
+    collapseRedrawCues(cues);
+    const kept = cues.filter((item) => item.words.length > 0);
+    expect(kept).toHaveLength(1);
+    expect(kept[0].words.map((word) => word.text)).toEqual(line);
+    expect(kept[0].t0).toBeCloseTo(0, 8);
+    expect(kept[0].t1).toBeCloseTo(0.6, 8);
+  });
+
+  it('keeps merging a long identical hold, not just the first 0.4s', () => {
+    const line = ['hope', 'that', 'having', 'consistency'];
+    const cues = Array.from({ length: 40 }, (_, index) =>
+      cue(index * 0.05, index * 0.05 + 0.05, line, undefined, false),
+    );
+    collapseRedrawCues(cues);
+    const kept = cues.filter((item) => item.words.length > 0);
+    expect(kept).toHaveLength(1);
+    expect(kept[0].t1).toBeCloseTo(2.0, 8);
+  });
+
+  it('keeps only newly revealed words from a growing karaoke line', () => {
+    const cues = [
+      cue(0, 0.05, ['YouTube', 'will'], undefined, false),
+      cue(0.05, 0.1, ['YouTube', 'will', 'soon'], undefined, false),
+      cue(0.1, 0.15, ['YouTube', 'will', 'soon', 'be'], undefined, false),
+      cue(0.15, 0.2, ['YouTube', 'will', 'soon', 'be'], undefined, false),
+      cue(0.2, 0.25, ['YouTube', 'will', 'soon', 'be'], undefined, false),
+    ];
+    collapseRedrawCues(cues);
+    expect(cues[0].words.map((word) => word.text)).toEqual(['YouTube', 'will']);
+    expect(cues[1].words.map((word) => word.text)).toEqual(['soon']);
+    expect(cues[2].words.map((word) => word.text)).toEqual(['be']);
+    expect(cues[3].words).toEqual([]);
+    expect(cues[4].words).toEqual([]);
+    expect(cues[2].t1).toBeCloseTo(0.25, 8);
+  });
+
+  it('does not collapse normal cues that start more than 0.4s apart', () => {
+    const cues = [
+      cue(0, 2, ['how', 'are', 'you'], undefined, false),
+      cue(2.5, 4, ['how', 'are', 'you', 'doing'], undefined, false),
+    ];
+    collapseRedrawCues(cues);
+    expect(cues[1].words.map((word) => word.text)).toEqual([
+      'how',
+      'are',
+      'you',
+      'doing',
+    ]);
   });
 });
 

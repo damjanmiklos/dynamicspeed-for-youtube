@@ -64,6 +64,7 @@ export function isMetaText(text: string): boolean {
 
 export function splitWords(text: string): string[] {
   return text
+    .replace(/\u200b/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .split(' ')

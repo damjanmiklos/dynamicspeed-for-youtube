@@ -62,10 +62,17 @@ export function json3LooksLikeAnimationFrames(input: unknown): boolean {
     previous = text;
   }
 
-  if (withText < MIN_ANIMATION_EVENTS || compared === 0) {
+  if (withText < MIN_ANIMATION_EVENTS) {
     return false;
   }
-  return (
-    short / withText >= SHORT_FRAME_RATIO && redrawn / compared >= REDRAW_RATIO
-  );
+  const shortRatio = short / withText;
+  // Word-by-word karaoke: consecutive events are different words, so the
+  // grow/identical check never fires, but almost every event is a 50ms frame.
+  if (shortRatio >= 0.5) {
+    return true;
+  }
+  if (compared === 0) {
+    return false;
+  }
+  return shortRatio >= SHORT_FRAME_RATIO && redrawn / compared >= REDRAW_RATIO;
 }

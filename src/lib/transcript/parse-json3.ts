@@ -4,7 +4,12 @@ import {
   tokensFromTimedWords,
   type AlignOptions,
 } from './align';
-import { deoverlapTokenTimes, stripRollingCueDuplicates, collapseRedrawCues } from './deoverlap';
+import {
+  collapseRedrawCues,
+  collapseRepeatedPhrases,
+  deoverlapTokenTimes,
+  stripRollingCueDuplicates,
+} from './deoverlap';
 import { MAX_CAPTION_BYTES, MAX_JSON3_EVENTS, MAX_TOKENS, MAX_WORD_CHARS } from './limits';
 import type { Json3Document, Json3Event, TimedCue, WordToken } from './types';
 
@@ -145,7 +150,7 @@ export function parseJson3(
   }
 
   tokens.sort((a, b) => a.t0 - b.t0 || a.t1 - b.t1);
-  return deoverlapTokenTimes(tokens).slice(0, MAX_TOKENS);
+  return collapseRepeatedPhrases(deoverlapTokenTimes(tokens)).slice(0, MAX_TOKENS);
 }
 
 export function parseJson3Safe(

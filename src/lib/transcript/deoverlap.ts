@@ -278,3 +278,139 @@ export function deoverlapTokenTimes(tokens: WordToken[]): WordToken[] {
 
   return out;
 }
+
+const MIN_REPEAT_PHRASE = 4;
+const MAX_REPEAT_PHRASE = 48;
+const MAX_PHRASE_PERIOD_SEC = 4.5;
+const REPEAT_COPY_SLACK_SEC = 0.45;
+
+function keysMatch(keys: string[], left: number, right: number, length: number): boolean {
+  for (let index = 0; index < length; index += 1) {
+    if (keys[left + index] !== keys[right + index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function uniqueKeyCount(keys: string[], start: number, length: number): number {
+  const seen = new Set<string>();
+  for (let index = 0; index < length; index += 1) {
+    seen.add(keys[start + index]);
+  }
+  return seen.size;
+}
+
+function rangeHasMeta(tokens: WordToken[], start: number, length: number): boolean {
+  for (let index = 0; index < length; index += 1) {
+    if (tokens[start + index]?.meta) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function retimePhrase(phrase: WordToken[], t0: number, t1: number): WordToken[] {
+  const duration = Math.max(t1 - t0, MIN_DURATION_SEC * phrase.length);
+  const weights = phrase.map((token) => Math.max(token.text.replace(/\s+/g, '').length, 1));
+  const weightSum = Math.max(
+    weights.reduce((sum, weight) => sum + weight, 0),
+    1,
+  );
+  let cursor = t0;
+  return phrase.map((token, index) => {
+    const share = duration * (weights[index] / weightSum);
+    const start = cursor;
+    const end = index === phrase.length - 1 ? t0 + duration : start + share;
+    cursor = end;
+    return {
+      ...token,
+      t0: start,
+      t1: Math.max(end, start + MIN_DURATION_SEC),
+    };
+  });
+}
+
+/**
+ * Animated / karaoke tracks often emit the same 4+ word line two or three
+ * times back-to-back as separate words. Keep one copy and stretch it across
+ * the redraw hold so WPM uses video time, not stacked onsets.
+ */
+export function collapseRepeatedPhrases(tokens: WordToken[]): WordToken[] {
+  if (tokens.length < MIN_REPEAT_PHRASE * 2) {
+    return tokens;
+  }
+
+  const keys = tokens.map((token) => (token.meta ? '' : cueWordKey(token.text)));
+  const out: WordToken[] = [];
+  const n = tokens.length;
+  let index = 0;
+
+  while (index < n) {
+    if (tokens[index].meta) {
+      out.push(tokens[index]);
+      index += 1;
+      continue;
+    }
+
+    const maxPeriod = Math.min(MAX_REPEAT_PHRASE, Math.floor((n - index) / 2));
+    let period = 0;
+    let copies = 1;
+    for (let length = MIN_REPEAT_PHRASE; length <= maxPeriod; length += 1) {
+      if (rangeHasMeta(tokens, index, length * 2)) {
+        continue;
+      }
+      if (uniqueKeyCount(keys, index, length) < 3) {
+        continue;
+      }
+      if (!keysMatch(keys, index, index + length, length)) {
+        continue;
+      }
+      const periodDt = tokens[index + length].t0 - tokens[index].t0;
+      if (!(periodDt > 0) || periodDt > MAX_PHRASE_PERIOD_SEC) {
+        continue;
+      }
+      let count = 2;
+      while (
+        index + (count + 1) * length <= n &&
+        !rangeHasMeta(tokens, index + count * length, length) &&
+        keysMatch(keys, index, index + count * length, length)
+      ) {
+        const start = tokens[index + count * length].t0;
+        const previous = tokens[index + (count - 1) * length].t0;
+        if (start - previous > periodDt + REPEAT_COPY_SLACK_SEC) {
+          break;
+        }
+        count += 1;
+      }
+      period = length;
+      copies = count;
+      break;
+    }
+
+    if (period === 0) {
+      out.push(tokens[index]);
+      index += 1;
+      continue;
+    }
+
+    let consumed = period * copies;
+    const leftover = Math.min(period - 1, n - index - consumed);
+    if (
+      leftover >= 2 &&
+      !rangeHasMeta(tokens, index + consumed, leftover) &&
+      keysMatch(keys, index, index + consumed, leftover)
+    ) {
+      const gap = tokens[index + consumed].t0 - tokens[index + consumed - period].t0;
+      if (gap <= MAX_PHRASE_PERIOD_SEC) {
+        consumed += leftover;
+      }
+    }
+
+    const last = tokens[index + consumed - 1];
+    out.push(...retimePhrase(tokens.slice(index, index + period), tokens[index].t0, last.t1));
+    index += consumed;
+  }
+
+  return out;
+}

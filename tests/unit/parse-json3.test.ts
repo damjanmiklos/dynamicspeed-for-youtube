@@ -185,4 +185,26 @@ describe('parseJson3', () => {
     );
     expect(tokens.map((token) => token.text)).toEqual(words);
   });
+
+  it('collapses a word-by-word karaoke line that repeats back to back', () => {
+    const line = ['YouTube', 'will', 'soon', 'be', 'making', 'a', 'weird', 'update'];
+    const events = [];
+    let tStartMs = 0;
+    for (let copy = 0; copy < 3; copy += 1) {
+      for (const word of line) {
+        events.push({
+          tStartMs,
+          dDurationMs: 50,
+          segs: [{ utf8: word }],
+        });
+        tStartMs += 50;
+      }
+    }
+    const tokens = parseJson3({ events }, { syllableWeighting: false }).filter(
+      (token) => !token.meta,
+    );
+    expect(tokens.map((token) => token.text)).toEqual(line);
+    expect(tokens[0]?.t0).toBeCloseTo(0, 5);
+    expect(tokens.at(-1)?.t1).toBeCloseTo(1.2, 5);
+  });
 });

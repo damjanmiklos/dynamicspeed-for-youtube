@@ -45,4 +45,17 @@ describe('json3LooksLikeAnimationFrames', () => {
       }),
     ).toBe(false);
   });
+
+  it('detects word-by-word short frames even when consecutive text is not a prefix', () => {
+    const words =
+      'YouTube will soon be making a weird and dumb update to the site although not'.split(
+        ' ',
+      );
+    const events = Array.from({ length: 48 }, (_, index) => ({
+      tStartMs: index * 50,
+      dDurationMs: 50,
+      segs: [{ utf8: words[index % words.length] }],
+    }));
+    expect(json3LooksLikeAnimationFrames({ events })).toBe(true);
+  });
 });

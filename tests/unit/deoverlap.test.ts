@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  collapseRedrawCues,
+  collapseRepeatedPhrases,
   deoverlapTokenTimes,
   rollingOverlapLength,
   stripRollingCueDuplicates,
-  collapseRedrawCues,
 } from '../../src/lib/transcript/deoverlap';
 import type { TimedCue, WordToken } from '../../src/lib/transcript/types';
 
@@ -188,6 +189,52 @@ describe('collapseRedrawCues', () => {
       'you',
       'doing',
     ]);
+  });
+});
+
+describe('collapseRepeatedPhrases', () => {
+  const line = ['YouTube', 'will', 'soon', 'be', 'making', 'a', 'weird', 'update'];
+
+  function timedLine(start: number, step: number, copies: number): WordToken[] {
+    const tokens: WordToken[] = [];
+    let t = start;
+    for (let copy = 0; copy < copies; copy += 1) {
+      for (const text of line) {
+        tokens.push(speech(t, t + step, text));
+        t += step;
+      }
+    }
+    return tokens;
+  }
+
+  it('keeps one copy of a karaoke line and stretches it across the hold', () => {
+    const tokens = timedLine(0, 0.05, 3);
+    const out = collapseRepeatedPhrases(tokens);
+    expect(out.map((token) => token.text)).toEqual(line);
+    expect(out[0]?.t0).toBeCloseTo(0, 5);
+    expect(out.at(-1)?.t1).toBeCloseTo(1.2, 5);
+    const span = (out.at(-1)?.t1 ?? 0) - (out[0]?.t0 ?? 0);
+    expect((out.length / span) * 60).toBeCloseTo(400, 0);
+  });
+
+  it('does not drop ordinary speech that is not an immediate repeat', () => {
+    const tokens = [
+      'You',
+      'know',
+      'that',
+      'feeling',
+      'when',
+      'things',
+      'just',
+      'do',
+      'not',
+      'go',
+      'your',
+      'way',
+    ].map((text, index) => speech(index * 0.3, index * 0.3 + 0.28, text));
+    expect(collapseRepeatedPhrases(tokens).map((token) => token.text)).toEqual(
+      tokens.map((token) => token.text),
+    );
   });
 });
 

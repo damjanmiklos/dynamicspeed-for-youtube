@@ -2,7 +2,6 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hasInnerHTMLAssignment } from './patch-react-innerhtml.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const wxtCli = join(root, 'node_modules', 'wxt', 'bin', 'wxt.mjs');
@@ -49,6 +48,10 @@ function listJsFiles(dir) {
     }
   }
   return files;
+}
+
+function hasInnerHTMLAssignment(code) {
+  return /\.innerHTML\s*=(?!=)/.test(code);
 }
 
 function assertNoInnerHTMLAssignment(dir) {

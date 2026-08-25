@@ -4,6 +4,7 @@
  * this extension never uses dangerouslySetInnerHTML. Rewrite them before
  * the Firefox zip is built.
  */
+import type { Plugin } from 'vite';
 
 const SCRIPT_VIA_INNERHTML =
   /([A-Za-z_$][\w$]*)\s*=\s*([A-Za-z_$][\w$]*)\.createElement\("div"\);\s*\1\.innerHTML\s*=\s*"<script>\\x3c\/script>";\s*\1\s*=\s*\1\.removeChild\(\s*\1\.firstChild\s*\);/g;
@@ -37,7 +38,7 @@ const HELPER = `function ${HELPER_NAME}(node, html) {
 }
 `;
 
-export function patchReactDomInnerHTML(code) {
+export function patchReactDomInnerHTML(code: string): string | null {
   if (!code.includes('.innerHTML')) {
     return null;
   }
@@ -59,7 +60,7 @@ export function patchReactDomInnerHTML(code) {
   return next;
 }
 
-function injectHelper(code) {
+function injectHelper(code: string): string {
   const strict = code.match(/^['"]use strict['"];\s*/);
   if (strict) {
     return code.slice(0, strict[0].length) + HELPER + code.slice(strict[0].length);
@@ -67,7 +68,7 @@ function injectHelper(code) {
   return HELPER + code;
 }
 
-export function patchReactDomInnerHTMLPlugin() {
+export function patchReactDomInnerHTMLPlugin(): Plugin {
   return {
     name: 'patch-react-dom-innerhtml',
     enforce: 'pre',
@@ -95,6 +96,6 @@ export function patchReactDomInnerHTMLPlugin() {
   };
 }
 
-export function hasInnerHTMLAssignment(code) {
+export function hasInnerHTMLAssignment(code: string): boolean {
   return /\.innerHTML\s*=(?!=)/.test(code);
 }

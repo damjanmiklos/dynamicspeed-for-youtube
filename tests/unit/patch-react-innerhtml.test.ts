@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   hasInnerHTMLAssignment,
   patchReactDomInnerHTML,
-} from '../../scripts/patch-react-innerhtml.mjs';
+} from '../../scripts/patch-react-innerhtml.ts';
 
 describe('patchReactDomInnerHTML', () => {
   it('rewrites React script-tag creation to createElement', () => {

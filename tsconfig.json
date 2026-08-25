@@ -4,5 +4,5 @@
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx"
   },
-  "exclude": ["dist", "node_modules", "vitest.config.ts", "playwright.config.ts"]
+  "exclude": ["dist", "node_modules", "scratch", "vitest.config.ts", "playwright.config.ts"]
 }

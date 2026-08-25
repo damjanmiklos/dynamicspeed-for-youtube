@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'wxt';
-import { patchReactDomInnerHTMLPlugin } from './scripts/patch-react-innerhtml.mjs';
+import { patchReactDomInnerHTMLPlugin } from './scripts/patch-react-innerhtml.ts';
 import { YOUTUBE_MATCHES } from './src/lib/youtube/video-id';
 
 const SCRATCH_IGNORED = [

@@ -3,6 +3,7 @@
   "description": "Automatically match YouTube playback speed to your target words-per-minute.",
   "private": true,
   "version": "1.0.1",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "wxt",

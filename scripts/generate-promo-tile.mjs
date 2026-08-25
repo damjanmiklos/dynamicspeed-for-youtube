@@ -4,9 +4,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 
-const WIDTH = 440;
-const HEIGHT = 280;
 const CHARCOAL = [27, 28, 31];
+const ICON_PATH =
+  'M8.96 64 L19.2 64 L30.72 43.52 L43.52 97.28 L58.88 30.72 L74.24 102.4 L74.24 25.6 L115.84 64 L74.24 102.4';
 
 function crc32(buffer) {
   let crc = ~0;
@@ -139,14 +139,20 @@ function writePngRgb(width, height, rgb) {
   ]);
 }
 
-function tileHtml(iconDataUrl) {
+function markSvg(size, strokeWidth) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="${size}" height="${size}" fill="none" aria-hidden="true">
+    <path d="${ICON_PATH}" stroke="#ff6a3d" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+function smallTileHtml(iconDataUrl) {
   return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      html, body { width: ${WIDTH}px; height: ${HEIGHT}px; overflow: hidden; }
+      html, body { width: 440px; height: 280px; overflow: hidden; }
       body {
         background: rgb(${CHARCOAL.join(' ')});
         display: flex;
@@ -161,13 +167,8 @@ function tileHtml(iconDataUrl) {
         height: 128px;
         flex: none;
         display: block;
-        image-rendering: auto;
       }
-      .copy {
-        margin-left: 22px;
-        min-width: 0;
-        max-width: 250px;
-      }
+      .copy { margin-left: 22px; min-width: 0; max-width: 250px; }
       h1 {
         color: #ffffff;
         font-size: 26px;
@@ -195,35 +196,223 @@ function tileHtml(iconDataUrl) {
 </html>`;
 }
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const iconPath = join(root, 'public', 'icon', '128.png');
-const outDir = join(root, 'store');
-const outPath = join(outDir, 'chrome-small-promo-tile.png');
+function marqueeHtml() {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { width: 1400px; height: 560px; overflow: hidden; }
+      body {
+        position: relative;
+        background: rgb(${CHARCOAL.join(' ')});
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 72px 88px 72px 96px;
+        font-family: "Segoe UI", "Segoe UI Variable Display", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: geometricPrecision;
+        color: #fff;
+      }
+      body::before {
+        content: "";
+        position: absolute;
+        right: 40px;
+        top: -80px;
+        width: 720px;
+        height: 720px;
+        background: radial-gradient(circle, rgba(255,106,61,0.14), transparent 64%);
+        pointer-events: none;
+      }
+      .brand {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        width: 620px;
+        flex: none;
+        z-index: 1;
+      }
+      .brand svg { flex: none; display: block; }
+      .copy { min-width: 0; }
+      h1 {
+        font-size: 54px;
+        font-weight: 800;
+        line-height: 1.05;
+        letter-spacing: -0.045em;
+      }
+      .tagline {
+        margin-top: 18px;
+        max-width: 420px;
+        color: #c9cad0;
+        font-size: 22px;
+        font-weight: 650;
+        line-height: 1.35;
+        letter-spacing: -0.015em;
+      }
+      .player {
+        position: relative;
+        z-index: 1;
+        width: 540px;
+        height: 392px;
+        flex: none;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid #2c313c;
+        border-radius: 18px;
+        background: #12141a;
+        box-shadow: 0 28px 64px rgba(0, 0, 0, 0.42);
+      }
+      .stage {
+        position: relative;
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(ellipse at 50% 42%, rgba(255,106,61,0.18), transparent 58%),
+          #0c0d10;
+      }
+      .badge {
+        position: absolute;
+        top: 18px;
+        left: 18px;
+        padding: 7px 12px;
+        border: 1px solid #3a2430;
+        border-radius: 999px;
+        background: rgba(18, 20, 26, 0.88);
+        color: #ff8a5c;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        height: 68px;
+        padding: 0 18px;
+        border-top: 1px solid #2c313c;
+        background: #181b22;
+      }
+      .play {
+        width: 0;
+        height: 0;
+        border-top: 8px solid transparent;
+        border-bottom: 8px solid transparent;
+        border-left: 13px solid #f5f6f8;
+      }
+      .progress {
+        flex: 1;
+        height: 6px;
+        overflow: hidden;
+        border-radius: 99px;
+        background: #2c313c;
+      }
+      .progress span {
+        display: block;
+        width: 58%;
+        height: 100%;
+        border-radius: 99px;
+        background: #ff6a3d;
+      }
+      .chip {
+        padding: 6px 11px;
+        border-radius: 8px;
+        background: #ff6a3d;
+        color: #fff;
+        font-size: 18px;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+      }
+      .speech {
+        color: #c9cad0;
+        font-size: 15px;
+        font-weight: 650;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="brand">
+      ${markSvg(168, 10.24)}
+      <div class="copy">
+        <h1>DynamicSpeed<br>for YouTube</h1>
+        <p class="tagline">Auto-adjusts YouTube speed based on talking pace.</p>
+      </div>
+    </section>
+    <aside class="player" aria-hidden="true">
+      <div class="stage">
+        <div class="badge">Target 165 WPM</div>
+        ${markSvg(280, 9.5)}
+      </div>
+      <div class="bar">
+        <div class="play"></div>
+        <div class="progress"><span></span></div>
+        <div class="chip">1.47×</div>
+        <div class="speech">Speech ~112 WPM</div>
+      </div>
+    </aside>
+  </body>
+</html>`;
+}
 
-const icon = readFileSync(iconPath);
-const html = tileHtml(`data:image/png;base64,${icon.toString('base64')}`);
-
-const browser = await chromium.launch({ headless: true });
-try {
-  const page = await browser.newPage({
-    viewport: { width: WIDTH, height: HEIGHT },
-    deviceScaleFactor: 1,
-  });
+async function capture(page, width, height, html) {
+  await page.setViewportSize({ width, height });
   await page.setContent(html, { waitUntil: 'load' });
-  await page.locator('img').evaluate((img) => img.decode());
+  await page.evaluate(() => document.fonts.ready);
+  const img = page.locator('img');
+  if ((await img.count()) > 0) {
+    await img.first().evaluate((node) => node.decode());
+  }
   const shot = await page.screenshot({
     type: 'png',
-    clip: { x: 0, y: 0, width: WIDTH, height: HEIGHT },
+    clip: { x: 0, y: 0, width, height },
     animations: 'disabled',
   });
   const decoded = decodePng(shot);
-  if (decoded.width !== WIDTH || decoded.height !== HEIGHT) {
+  if (decoded.width !== width || decoded.height !== height) {
     throw new Error(`Unexpected screenshot size ${decoded.width}x${decoded.height}`);
   }
-  const png = writePngRgb(WIDTH, HEIGHT, flattenToRgb(decoded.rgba, WIDTH, HEIGHT));
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(outPath, png);
-  console.log(`Wrote ${outPath} (${WIDTH}x${HEIGHT}, ${png.length} bytes, 24-bit PNG)`);
+  return writePngRgb(width, height, flattenToRgb(decoded.rgba, width, height));
+}
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const outDir = join(root, 'store');
+const icon = readFileSync(join(root, 'public', 'icon', '128.png'));
+const iconDataUrl = `data:image/png;base64,${icon.toString('base64')}`;
+
+const tiles = [
+  {
+    name: 'chrome-small-promo-tile.png',
+    width: 440,
+    height: 280,
+    html: smallTileHtml(iconDataUrl),
+  },
+  {
+    name: 'chrome-marquee-promo-tile.png',
+    width: 1400,
+    height: 560,
+    html: marqueeHtml(),
+  },
+];
+
+mkdirSync(outDir, { recursive: true });
+const browser = await chromium.launch({ headless: true });
+try {
+  const page = await browser.newPage({
+    viewport: { width: 440, height: 280 },
+    deviceScaleFactor: 1,
+  });
+  for (const tile of tiles) {
+    const png = await capture(page, tile.width, tile.height, tile.html);
+    const outPath = join(outDir, tile.name);
+    writeFileSync(outPath, png);
+    console.log(`Wrote ${outPath} (${tile.width}x${tile.height}, ${png.length} bytes, 24-bit PNG)`);
+  }
 } finally {
   await browser.close();
 }

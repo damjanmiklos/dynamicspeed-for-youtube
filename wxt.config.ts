@@ -45,6 +45,16 @@ export default defineConfig({
   suppressWarnings: {
     firefoxDataCollection: true,
   },
+  zip: {
+    excludeSources: [
+      'scratch/**',
+      'test-results/**',
+      'playwright-report/**',
+      'playwright/.cache/**',
+      'coverage/**',
+      'blob-report/**',
+    ],
+  },
   vite: () => ({
     plugins: [ignoreScratchFsWatch(), tailwindcss()],
     server: {

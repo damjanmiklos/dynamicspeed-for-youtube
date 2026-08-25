@@ -214,7 +214,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
       cancelIntro();
       dropRateOwnership();
       if (current.restore1xWhenDisabled && forceHold == null) {
-        commitRate(1);
+        commitRate(fallbackRate(current));
       } else if (forceHold != null) {
         commitRate(forceHold);
       }

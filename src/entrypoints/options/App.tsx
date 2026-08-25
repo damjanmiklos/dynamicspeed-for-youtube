@@ -221,7 +221,7 @@ export function OptionsApp() {
               </Row>
               <Row
                 title="Default speed"
-                hint="Used before captions are ready, and whenever a transcript cannot be found."
+                hint="Used before captions are ready, when a transcript cannot be found, and when restoring speed after DynamicSpeed is turned off."
                 help={SETTINGS_HELP.fallbackSpeed}
               >
                 <SliderField
@@ -680,7 +680,7 @@ export function OptionsApp() {
                   }
                 />
               </Row>
-              <Row title="Restore 1× when disabled" hint="Reset playback speed when DynamicSpeed is turned off." help={SETTINGS_HELP.restore1x}>
+              <Row title="Restore default speed when disabled" hint="Reset playback to Default speed when DynamicSpeed is turned off." help={SETTINGS_HELP.restore1x}>
                 <div className="flex justify-end">
                   <Toggle
                     checked={settings.restore1xWhenDisabled}

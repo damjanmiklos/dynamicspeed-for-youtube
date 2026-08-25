@@ -80,7 +80,7 @@ export default defineContentScript({
         controller.setTokens([], 'no-video');
         return;
       }
-      const deadline = Date.now() + (settings.temporarilyEnableCaptions ? 32_000 : 20_000);
+      const deadline = Date.now() + (settings.temporarilyEnableCaptions ? 50_000 : 28_000);
       let lastError: unknown;
       while (Date.now() < deadline && gen === loadGeneration && !abort.signal.aborted) {
         try {

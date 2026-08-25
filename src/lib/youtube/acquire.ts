@@ -167,7 +167,7 @@ export async function acquireTranscript(
       preferManual: settings.preferManualCaptions,
       nudgeCaptions: settings.temporarilyEnableCaptions,
     },
-    settings.temporarilyEnableCaptions ? 22_000 : 15_000,
+    settings.temporarilyEnableCaptions ? 40_000 : 20_000,
   ).catch(() => null);
   throwIfAborted(signal);
   const capturedTokens = tokensFromUnknown(

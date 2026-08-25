@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parseJson3 } from '../../src/lib/transcript/parse-json3';
+import { MAX_CAPTION_BYTES } from '../../src/lib/transcript/limits';
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), '../../testdata/json3');
 
@@ -184,6 +185,19 @@ describe('parseJson3', () => {
       (token) => !token.meta,
     );
     expect(tokens.map((token) => token.text)).toEqual(words);
+  });
+
+  it('still parses podcast-sized JSON3 strings above 2MB', () => {
+    const payload = {
+      events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'hello there' }] }],
+      pad: 'a'.repeat(2_100_000),
+    };
+    const tokens = parseJson3(JSON.stringify(payload), { syllableWeighting: false });
+    expect(tokens.map((token) => token.text)).toEqual(['hello', 'there']);
+  });
+
+  it('rejects caption strings larger than MAX_CAPTION_BYTES', () => {
+    expect(parseJson3('x'.repeat(MAX_CAPTION_BYTES + 1), { syllableWeighting: false })).toEqual([]);
   });
 
   it('collapses a word-by-word karaoke line that repeats back to back', () => {

@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build:chrome && playwright test",
+    "test:e2e:headed": "npm run build:chrome && playwright test",
     "postinstall": "wxt prepare"
   },
   "dependencies": {

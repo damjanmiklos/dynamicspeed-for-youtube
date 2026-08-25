@@ -208,6 +208,7 @@ function readYtcfg(key: string): string | null {
 /** Public Android player client string, not a secret. WEB version on ANDROID often fails. */
 const ANDROID_INNERTUBE_VERSION = '19.47.7';
 const MAX_TRACK_ATTEMPTS = 4;
+const TIMEDTEXT_FETCH_MS = 15_000;
 
 async function innertubePlayer(
   videoId: string,
@@ -302,7 +303,7 @@ function sleep(ms: number): Promise<void> {
 function xhrGetText(
   url: string,
   signal?: AbortSignal,
-  timeoutMs = 5000,
+  timeoutMs = TIMEDTEXT_FETCH_MS,
 ): Promise<string | null> {
   return new Promise((resolve) => {
     if (signal?.aborted) {
@@ -388,7 +389,7 @@ function uniqueUrls(urls: Array<string | null | undefined>): string[] {
 async function fetchAllowlistedTimedText(
   baseUrl: string,
   signal?: AbortSignal,
-  timeoutMs = 5000,
+  timeoutMs = TIMEDTEXT_FETCH_MS,
 ): Promise<unknown | null> {
   const videoId = parseVideoId(location.href) ?? '';
   const bound = videoId ? bindTimedTextToVideo(baseUrl, videoId) : toSafeTimedTextUrl(baseUrl);
@@ -517,7 +518,7 @@ async function jsonFromTracks(
   tracks: CaptionTrackPayload[],
   prefs: { language: string; preferManual: boolean },
   signal?: AbortSignal,
-  timeoutMs = 5000,
+  timeoutMs = TIMEDTEXT_FETCH_MS,
 ): Promise<unknown | null> {
   const ranked = rankTracks(tracks, prefs).slice(0, MAX_TRACK_ATTEMPTS);
   let animatedFallback: unknown | null = null;
@@ -637,7 +638,7 @@ async function captureViaCaptionNudge(
           // keep waiting for timedtext from the track already on
         }
       }
-      const hit = await waitForCapture(videoId, signal, 2200 + attempt * 600);
+      const hit = await waitForCapture(videoId, signal, 8_000 + attempt * 2_000);
       if (hit && !json3LooksLikeAnimationFrames(hit)) {
         return hit;
       }
@@ -646,7 +647,7 @@ async function captureViaCaptionNudge(
         tracksFrom(later),
         captionPrefsForResponse(resolved, later),
         signal,
-        2500,
+        TIMEDTEXT_FETCH_MS,
       );
       if (afterPot) {
         return afterPot;
@@ -701,7 +702,7 @@ async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> 
       return captured;
     }
 
-    const tryResponse = async (response: PlayerResponse | null, timeoutMs = 5000) => {
+    const tryResponse = async (response: PlayerResponse | null, timeoutMs = TIMEDTEXT_FETCH_MS) => {
       if (abort.signal.aborted) {
         return null;
       }
@@ -710,7 +711,7 @@ async function acquireFallbackTranscriptNow(payload: unknown): Promise<unknown> 
     };
 
     const playerResponse = readPlayerResponse();
-    const fromPlayer = await tryResponse(playerResponse, prefs.nudgeCaptions ? 2000 : 5000);
+    const fromPlayer = await tryResponse(playerResponse, TIMEDTEXT_FETCH_MS);
     if (fromPlayer) {
       await restoreCaptionsToUserPref();
       return fromPlayer;

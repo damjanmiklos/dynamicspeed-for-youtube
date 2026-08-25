@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { hasInnerHTMLAssignment } from './patch-react-innerhtml.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const wxtCli = join(root, 'node_modules', 'wxt', 'bin', 'wxt.mjs');
@@ -37,6 +38,29 @@ function assert(condition, message) {
   }
 }
 
+function listJsFiles(dir) {
+  const files = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listJsFiles(full));
+    } else if (entry.name.endsWith('.js')) {
+      files.push(full);
+    }
+  }
+  return files;
+}
+
+function assertNoInnerHTMLAssignment(dir) {
+  const offenders = listJsFiles(dir).filter((file) =>
+    hasInnerHTMLAssignment(readFileSync(file, 'utf8')),
+  );
+  assert(
+    offenders.length === 0,
+    `Firefox build still assigns innerHTML (addons-linter warning):\n${offenders.join('\n')}`,
+  );
+}
+
 const chrome = readManifest('chrome');
 const firefox = readManifest('firefox');
 
@@ -50,6 +74,11 @@ assert(
   Boolean(firefox.manifest.browser_specific_settings?.gecko?.id),
   `Firefox MV3 manifest must include browser_specific_settings.gecko.id (${firefox.path})`,
 );
+assert(
+  firefox.manifest.browser_specific_settings?.gecko?.strict_min_version === '142.0',
+  `Firefox gecko.strict_min_version must be 142.0 for data_collection_permissions (${firefox.path})`,
+);
+assertNoInnerHTMLAssignment(dirname(firefox.path));
 const firefoxBackground = firefox.manifest.background ?? {};
 assert(
   Boolean(firefoxBackground.service_worker) ||

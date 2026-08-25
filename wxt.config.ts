@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'wxt';
+import { patchReactDomInnerHTMLPlugin } from './scripts/patch-react-innerhtml.mjs';
 import { YOUTUBE_MATCHES } from './src/lib/youtube/video-id';
 
 const SCRATCH_IGNORED = [
@@ -56,7 +57,7 @@ export default defineConfig({
     ],
   },
   vite: () => ({
-    plugins: [ignoreScratchFsWatch(), tailwindcss()],
+    plugins: [ignoreScratchFsWatch(), patchReactDomInnerHTMLPlugin(), tailwindcss()],
     server: {
       watch: {
         ignored: SCRATCH_IGNORED,
@@ -76,7 +77,8 @@ export default defineConfig({
     browser_specific_settings: {
       gecko: {
         id: 'dynamicspeed-for-youtube@dynamicspeed',
-        strict_min_version: '121.0',
+        // data_collection_permissions: Firefox 140 desktop / 142 Android.
+        strict_min_version: '142.0',
         data_collection_permissions: {
           required: ['none'],
         },

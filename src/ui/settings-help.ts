@@ -225,8 +225,8 @@ export const SETTINGS_HELP = {
   restore1x: {
     label: 'About restore default speed when disabled',
     body: [
-      'When DynamicSpeed turns off — master switch, this video, this channel, Shorts/music blocks — playback is set back to Default speed so YouTube does not stay stuck at the last automated rate.',
-      'Turn this off if you want the last speed to remain when you pause automation (for example you disabled the channel mid-video and like where it landed).',
+      'When DynamicSpeed turns off — master switch, this video, this channel, Shorts/music blocks — playback is set back to Default speed once so YouTube does not stay stuck at the last automated rate. After that, YouTube’s own speed menu is left alone.',
+      'Turn this off if you want the last speed to remain when you pause automation (for example you disabled the channel mid-video and like where it landed). Either way, DynamicSpeed stops writing playback rate so you can change speed by hand.',
       'This does not run during ads if Ignore ads is on, because we are not driving rate in that moment.',
     ],
   },

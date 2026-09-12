@@ -4,6 +4,23 @@ export function applyPreservesPitch(video: HTMLVideoElement): void {
   (video as HTMLVideoElement & { webkitPreservesPitch?: boolean }).webkitPreservesPitch = true;
 }
 
+export type DisabledRateAction = 'write-force' | 'restore-once' | 'release';
+
+/** When automation is off, write at most one restore, then leave YouTube's rate alone. */
+export function disabledRateAction(input: {
+  forceHold: number | null;
+  restore1xWhenDisabled: boolean;
+  alreadyRestored: boolean;
+}): DisabledRateAction {
+  if (input.forceHold != null) {
+    return 'write-force';
+  }
+  if (input.restore1xWhenDisabled && !input.alreadyRestored) {
+    return 'restore-once';
+  }
+  return 'release';
+}
+
 export function setPlaybackRate(video: HTMLVideoElement, rate: number): void {
   applyPreservesPitch(video);
   if (!Number.isFinite(rate)) {

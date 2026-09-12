@@ -24,7 +24,12 @@ import {
   removePlayerChip,
   upsertPlayerChip,
 } from './chip';
-import { applyPreservesPitch, isExternalRateChange, setPlaybackRate } from './playback';
+import {
+  applyPreservesPitch,
+  disabledRateAction,
+  isExternalRateChange,
+  setPlaybackRate,
+} from './playback';
 import { createSpeedConflictTracker, stolenPlaybackRate } from './speed-conflict';
 import { isShortsPath, parseVideoId } from './video-id';
 import type { PageState } from '../messaging/protocol';
@@ -62,6 +67,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
   let stopChrome: (() => void) | null = null;
   let stopLoop: (() => void) | null = null;
   let onChipClick: (() => void) | null = null;
+  let restoredDisableKey: string | null = null;
 
   function pageIdentity(resolvedVideoId: string | null) {
     const meta = hooks.getChannel();
@@ -186,6 +192,10 @@ export function createPlaybackController(hooks: ControllerHooks) {
     ownRate(applied);
   }
 
+  function disableRestoreKey(current: ResolvedPlaybackSettings): string {
+    return `${parseVideoId(location.href) ?? ''}:${current.blockReason ?? 'off'}`;
+  }
+
   function tick(): void {
     if (destroyed) {
       return;
@@ -213,14 +223,23 @@ export function createPlaybackController(hooks: ControllerHooks) {
     if (!current.automationAllowed || forceHold != null) {
       cancelIntro();
       dropRateOwnership();
-      if (current.restore1xWhenDisabled && forceHold == null) {
-        commitRate(fallbackRate(current));
-      } else if (forceHold != null) {
+      const key = disableRestoreKey(current);
+      const action = disabledRateAction({
+        forceHold,
+        restore1xWhenDisabled: current.restore1xWhenDisabled,
+        alreadyRestored: restoredDisableKey === key,
+      });
+      if (action === 'write-force' && forceHold != null) {
         commitRate(forceHold);
+      } else if (action === 'restore-once') {
+        commitRate(fallbackRate(current));
+        restoredDisableKey = key;
       }
       updateChip(video.playbackRate, current);
       return;
     }
+
+    restoredDisableKey = null;
 
     if (now < overrideUntil) {
       cancelIntro();

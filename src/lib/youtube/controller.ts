@@ -28,6 +28,7 @@ import {
   applyPreservesPitch,
   disabledRateAction,
   isExternalRateChange,
+  NATIVE_PLAYBACK_RATE,
   setPlaybackRate,
 } from './playback';
 import { createSpeedConflictTracker, stolenPlaybackRate } from './speed-conflict';
@@ -228,9 +229,12 @@ export function createPlaybackController(hooks: ControllerHooks) {
         forceHold,
         restore1xWhenDisabled: current.restore1xWhenDisabled,
         alreadyRestored: restoredDisableKey === key,
+        blockReason: current.blockReason,
       });
       if (action === 'write-force' && forceHold != null) {
         commitRate(forceHold);
+      } else if (action === 'pin-native') {
+        commitRate(NATIVE_PLAYBACK_RATE);
       } else if (action === 'restore-once') {
         commitRate(fallbackRate(current));
         restoredDisableKey = key;

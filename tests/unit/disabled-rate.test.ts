@@ -38,4 +38,23 @@ describe('disabledRateAction', () => {
       }),
     ).toBe('release');
   });
+
+  it('pins music videos at 1× instead of Default speed', () => {
+    expect(
+      disabledRateAction({
+        forceHold: null,
+        restore1xWhenDisabled: true,
+        alreadyRestored: false,
+        blockReason: 'music-disabled',
+      }),
+    ).toBe('pin-native');
+    expect(
+      disabledRateAction({
+        forceHold: null,
+        restore1xWhenDisabled: false,
+        alreadyRestored: true,
+        blockReason: 'music-disabled',
+      }),
+    ).toBe('pin-native');
+  });
 });

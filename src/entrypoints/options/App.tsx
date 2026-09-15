@@ -635,7 +635,7 @@ export function OptionsApp() {
                   />
                 </div>
               </Row>
-              <Row title="Ignore music videos" hint="Leave official Music-category videos at YouTube’s speed." help={SETTINGS_HELP.ignoreMusic}>
+              <Row title="Ignore music videos" hint="Hold official Music-category videos at 1×, not Default speed." help={SETTINGS_HELP.ignoreMusic}>
                 <div className="flex justify-end">
                   <Toggle
                     checked={settings.ignoreMusicVideos}

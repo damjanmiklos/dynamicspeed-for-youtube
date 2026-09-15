@@ -193,7 +193,7 @@ export const SETTINGS_HELP = {
   ignoreMusic: {
     label: 'About ignore music videos',
     body: [
-      'If YouTube marks the video’s category as Music, DynamicSpeed leaves playback rate alone. Official music videos are a poor fit for speech-WPM matching.',
+      'If YouTube marks the video’s category as Music, DynamicSpeed does not match WPM. Playback is held at 1× — not your Default speed — so a 2× listening default does not speed up songs.',
       'This uses the player’s category, not “the video happens to contain music.” Talk videos with a music bed still automate unless you disable that channel or video.',
       'Turn this off if you want Target WPM applied to music videos as well (usually a bad idea).',
     ],
@@ -225,8 +225,9 @@ export const SETTINGS_HELP = {
   restore1x: {
     label: 'About restore default speed when disabled',
     body: [
-      'When DynamicSpeed turns off — master switch, this video, this channel, Shorts/music blocks — playback is set back to Default speed once so YouTube does not stay stuck at the last automated rate. After that, YouTube’s own speed menu is left alone.',
-      'Turn this off if you want the last speed to remain when you pause automation (for example you disabled the channel mid-video and like where it landed). Either way, DynamicSpeed stops writing playback rate so you can change speed by hand.',
+      'When DynamicSpeed turns off — master switch, this video, this channel, or Shorts — playback is set back to Default speed once so YouTube does not stay stuck at the last automated rate. After that, YouTube’s own speed menu is left alone.',
+      'Music videos (when Ignore music videos is on) are different: they are held at 1×, not Default speed.',
+      'Turn this off if you want the last speed to remain when you pause automation (for example you disabled the channel mid-video and like where it landed). Either way, DynamicSpeed stops writing playback rate on those disable rules so you can change speed by hand.',
       'This does not run during ads if Ignore ads is on, because we are not driving rate in that moment.',
     ],
   },

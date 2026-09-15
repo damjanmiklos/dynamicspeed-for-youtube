@@ -4,16 +4,22 @@ export function applyPreservesPitch(video: HTMLVideoElement): void {
   (video as HTMLVideoElement & { webkitPreservesPitch?: boolean }).webkitPreservesPitch = true;
 }
 
-export type DisabledRateAction = 'write-force' | 'restore-once' | 'release';
+export type DisabledRateAction = 'write-force' | 'restore-once' | 'pin-native' | 'release';
+
+export const NATIVE_PLAYBACK_RATE = 1;
 
 /** When automation is off, write at most one restore, then leave YouTube's rate alone. */
 export function disabledRateAction(input: {
   forceHold: number | null;
   restore1xWhenDisabled: boolean;
   alreadyRestored: boolean;
+  blockReason?: string | null;
 }): DisabledRateAction {
   if (input.forceHold != null) {
     return 'write-force';
+  }
+  if (input.blockReason === 'music-disabled') {
+    return 'pin-native';
   }
   if (input.restore1xWhenDisabled && !input.alreadyRestored) {
     return 'restore-once';

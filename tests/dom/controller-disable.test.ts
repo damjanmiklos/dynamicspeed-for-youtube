@@ -102,4 +102,26 @@ describe('controller releases speed when disabled', () => {
     expect(video.playbackRate).toBeCloseTo(1.5, 2);
     controller.destroy();
   });
+
+  it('holds music videos at 1× even when Default speed is 2×', async () => {
+    const video = mountVideo(2.5);
+    const controller = createPlaybackController({
+      getChannel: () => ({ ...idleChannel, isMusic: true }),
+    });
+    controller.setSettings({
+      ...DEFAULT_SETTINGS,
+      enabled: true,
+      ignoreMusicVideos: true,
+      restore1xWhenDisabled: true,
+      fallbackSpeed: 2,
+    });
+    controller.start();
+    await flushFrames();
+    expect(video.playbackRate).toBeCloseTo(1, 2);
+
+    video.playbackRate = 2;
+    await flushFrames();
+    expect(video.playbackRate).toBeCloseTo(1, 2);
+    controller.destroy();
+  });
 });

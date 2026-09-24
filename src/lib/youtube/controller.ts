@@ -53,6 +53,8 @@ export function shouldApplySpeedCurve(
 export function createPlaybackController(hooks: ControllerHooks) {
   let settings: DynamicSpeedSettings | null = null;
   let tokens: WordToken[] = [];
+  /** Video the tokens were acquired for; null when unknown. */
+  let tokensVideoId: string | null = null;
   let curve: SpeedCurve | null = null;
   let applied = 1;
   let overrideUntil = 0;
@@ -104,6 +106,19 @@ export function createPlaybackController(hooks: ControllerHooks) {
         causal: hooks.getChannel().isLive,
       }),
     );
+  }
+
+  /**
+   * Curve is ready and belongs to the page's video. After SPA navigation the
+   * URL changes before VIDEO_ID_CHANGED arrives (up to a 500 ms poll); the old
+   * video's curve must not drive the new one in the meantime.
+   */
+  function curveReady(): boolean {
+    if (!curve || transcriptStatus !== 'ready') {
+      return false;
+    }
+    const pageVideoId = parseVideoId(location.href);
+    return !tokensVideoId || !pageVideoId || pageVideoId === tokensVideoId;
   }
 
   function attachVideo(next: HTMLVideoElement | null): void {
@@ -184,7 +199,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
   }
 
   function snapRateToPlayhead(): void {
-    if (!video || !curve || transcriptStatus !== 'ready') {
+    if (!video || !curve || !curveReady()) {
       lastVideoTime = video?.currentTime ?? lastVideoTime;
       return;
     }
@@ -277,7 +292,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
       return;
     }
 
-    if (!curve || transcriptStatus !== 'ready') {
+    if (!curve || !curveReady()) {
       pinToFallback(current);
       updateChip(applied, current);
       return;
@@ -355,15 +370,13 @@ export function createPlaybackController(hooks: ControllerHooks) {
       return;
     }
     const spoken =
-      curve && transcriptStatus === 'ready' && video
-        ? wpmAt(curve, video.currentTime)
-        : null;
+      curve && curveReady() && video ? wpmAt(curve, video.currentTime) : null;
     const wpmUnit = current && wpmAdjustmentsActive(current) ? 'adjusted WPM' : 'WPM';
     const conflict = speedConflict.isActive();
     const inactive =
       !current.automationAllowed ||
       Boolean(mode) ||
-      transcriptStatus !== 'ready';
+      !curveReady();
     const titleParts = [
       'DynamicSpeed for YouTube',
       `Target ${current.targetWpm} WPM`,
@@ -423,8 +436,9 @@ export function createPlaybackController(hooks: ControllerHooks) {
         overrideUntil = 0;
       }
     },
-    setTokens(next: WordToken[], status: string) {
+    setTokens(next: WordToken[], status: string, videoId: string | null = null) {
       tokens = next;
+      tokensVideoId = videoId;
       transcriptStatus = status;
       rebuildCurve(video?.duration);
       const live = shouldApplySpeedCurve(status, Boolean(curve));
@@ -485,15 +499,12 @@ export function createPlaybackController(hooks: ControllerHooks) {
         channelName: meta.channelName,
         title: meta.title,
         playbackRate: video?.playbackRate ?? null,
-        spokenWpm:
-          curve && transcriptStatus === 'ready' && video
-            ? wpmAt(curve, video.currentTime)
-            : null,
-        hasTranscript: tokens.length > 0 && transcriptStatus === 'ready',
+        spokenWpm: curve && curveReady() && video ? wpmAt(curve, video.currentTime) : null,
+        hasTranscript: tokens.length > 0 && curveReady(),
         transcriptStatus,
         automationActive: Boolean(
           current?.automationAllowed &&
-            shouldApplySpeedCurve(transcriptStatus, Boolean(curve)) &&
+            curveReady() &&
             performance.now() >= overrideUntil &&
             forceHold == null,
         ),

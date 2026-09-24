@@ -140,3 +140,37 @@ describe('player chip updates', () => {
     observer.disconnect();
   });
 });
+
+describe('curve belongs to its video', () => {
+  const previousLocation = window.location;
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { configurable: true, value: previousLocation });
+    document.body.innerHTML = '';
+  });
+
+  it("does not apply the previous video's curve after SPA navigation", async () => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: new URL('https://www.youtube.com/watch?v=aaaaaaaaaaa'),
+    });
+    const { video } = mountVideo(1);
+    const controller = createPlaybackController({ getChannel: () => idleChannel });
+    controller.setSettings({ ...DEFAULT_SETTINGS, fallbackSpeed: 1, minSpeed: 0.5, targetWpm: 400 });
+    controller.start();
+    controller.setTokens(speechTokens(), 'ready', 'aaaaaaaaaaa');
+    await new Promise((resolve) => setTimeout(resolve, 2300));
+    // 150 WPM speech at a 400 WPM target: well above 1×.
+    expect(video.playbackRate).toBeGreaterThan(2);
+    expect(controller.getPageState().hasTranscript).toBe(true);
+
+    // URL moves to the next video before VIDEO_ID_CHANGED arrives.
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: new URL('https://www.youtube.com/watch?v=bbbbbbbbbbb'),
+    });
+    await flushFrames();
+    expect(video.playbackRate).toBeCloseTo(1, 2);
+    expect(controller.getPageState().hasTranscript).toBe(false);
+    controller.destroy();
+  });
+});

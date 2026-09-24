@@ -6,6 +6,8 @@ import {
   toCompactTokens,
 } from '../transcript/compact';
 import type { CompactWordToken, WordToken } from '../transcript/types';
+import { MAX_TOKENS } from '../transcript/limits';
+import { RUNTIME_SOURCE } from '../messaging/protocol';
 
 export const CACHE_BYTE_BUDGET = 4 * 1024 * 1024;
 export const CACHE_MAX_VIDEOS = 15;
@@ -36,8 +38,17 @@ export function memoryGet(key: string): WordToken[] | null {
   return memory.get(key) ?? null;
 }
 
+/** Per-tab LRU of parsed tokens; evictions now happen in the background. */
 export function memorySet(key: string, tokens: WordToken[]): void {
+  memory.delete(key);
   memory.set(key, tokens);
+  while (memory.size > CACHE_MAX_VIDEOS) {
+    const oldest = memory.keys().next().value;
+    if (oldest === undefined) {
+      break;
+    }
+    memory.delete(oldest);
+  }
 }
 
 export function emptyCache(): TranscriptCacheStore {
@@ -222,43 +233,123 @@ async function persistTranscriptCache(
   await browser.storage.local.set({ [TRANSCRIPT_CACHE_KEY]: store });
 }
 
+/**
+ * Read-only view with eviction/expiry applied in memory. It never writes:
+ * every write goes through the single writer below, so a tab that only
+ * reads cannot clobber another tab's fresh entry.
+ */
 export async function loadTranscriptCache(): Promise<TranscriptCacheStore> {
   const { browser } = await import('wxt/browser');
   const stored = await browser.storage.local.get(TRANSCRIPT_CACHE_KEY);
   const raw = readCacheStore(stored[TRANSCRIPT_CACHE_KEY]);
   const next = await applyCachePolicy(raw);
   forgetDropped(raw, next);
-  if (cacheSignature(raw) !== cacheSignature(next)) {
-    await persistTranscriptCache(next);
-  }
   return next;
 }
 
-export async function saveTranscriptCache(
-  store: TranscriptCacheStore,
-): Promise<void> {
-  const next = await applyCachePolicy(store);
-  forgetDropped(store, next);
-  await persistTranscriptCache(next);
+export type CacheMutation =
+  | {
+      kind: 'put';
+      videoId: string;
+      language: string;
+      trackKind: string;
+      tokens: CompactWordToken[];
+    }
+  | { kind: 'touch'; key: string }
+  | { kind: 'prune'; expire?: boolean }
+  | { kind: 'clear' };
+
+let mutationQueue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Apply one read-modify-write to the shared cache key, strictly one at a
+ * time. The background runs these for every tab and extension page; two tabs
+ * writing the whole store at once used to drop one tab's entry.
+ */
+export function applyCacheMutation(mutation: CacheMutation): Promise<void> {
+  const run = mutationQueue.then(() => runCacheMutation(mutation));
+  mutationQueue = run.catch(() => undefined);
+  return run;
 }
 
-export async function pruneExpiredTranscriptCache(
-  expire?: boolean,
-): Promise<void> {
+async function runCacheMutation(mutation: CacheMutation): Promise<void> {
   const { browser } = await import('wxt/browser');
+  if (mutation.kind === 'clear') {
+    memory.clear();
+    await browser.storage.local.remove(TRANSCRIPT_CACHE_KEY);
+    return;
+  }
   const stored = await browser.storage.local.get(TRANSCRIPT_CACHE_KEY);
   const raw = readCacheStore(stored[TRANSCRIPT_CACHE_KEY]);
-  const next = await applyCachePolicy(raw, Date.now(), expire);
+  let changed = raw;
+  if (mutation.kind === 'put') {
+    const { videoId, language, trackKind } = mutation;
+    if (
+      !/^[\w-]{11}$/.test(videoId) ||
+      typeof language !== 'string' ||
+      language.length < 2 ||
+      language.length > 16 ||
+      typeof trackKind !== 'string' ||
+      trackKind.length === 0 ||
+      trackKind.length > 24 ||
+      !Array.isArray(mutation.tokens) ||
+      mutation.tokens.length > MAX_TOKENS
+    ) {
+      return;
+    }
+    const tokens = toCompactTokens(fromCompactTokens(mutation.tokens));
+    if (tokens.length === 0) {
+      return;
+    }
+    changed = putCacheEntry(raw, {
+      key: cacheKey(videoId, language, trackKind),
+      videoId,
+      language,
+      trackKind,
+      tokens,
+    });
+  } else if (mutation.kind === 'touch') {
+    if (typeof mutation.key !== 'string' || mutation.key.length > 64) {
+      return;
+    }
+    changed = touchCacheEntry(raw, mutation.key);
+  }
+  const next = await applyCachePolicy(
+    changed,
+    Date.now(),
+    mutation.kind === 'prune' ? mutation.expire : undefined,
+  );
   forgetDropped(raw, next);
   if (cacheSignature(raw) !== cacheSignature(next)) {
     await persistTranscriptCache(next);
   }
 }
 
+/** Hand a write to the background (the single writer); run it here if it is unreachable. */
+async function requestCacheMutation(mutation: CacheMutation): Promise<void> {
+  const { browser } = await import('wxt/browser');
+  try {
+    const response = (await browser.runtime.sendMessage({
+      source: RUNTIME_SOURCE,
+      type: 'CACHE_MUTATION',
+      mutation,
+    })) as { ok?: unknown } | undefined;
+    if (response?.ok === true) {
+      return;
+    }
+  } catch {
+    // No background listener (tests, or the extension is reloading).
+  }
+  await applyCacheMutation(mutation);
+}
+
+export async function pruneExpiredTranscriptCache(expire?: boolean): Promise<void> {
+  await requestCacheMutation({ kind: 'prune', expire });
+}
+
 export async function clearTranscriptCache(): Promise<void> {
   memory.clear();
-  const { browser } = await import('wxt/browser');
-  await browser.storage.local.remove(TRANSCRIPT_CACHE_KEY);
+  await requestCacheMutation({ kind: 'clear' });
 }
 
 export async function rememberTokens(
@@ -267,15 +358,13 @@ export async function rememberTokens(
 ): Promise<void> {
   const key = cacheKey(keyParts.videoId, keyParts.language, keyParts.trackKind);
   memorySet(key, tokens);
-  const store = await loadTranscriptCache();
-  const next = putCacheEntry(store, {
-    key,
+  await requestCacheMutation({
+    kind: 'put',
     videoId: keyParts.videoId,
     language: keyParts.language,
     trackKind: keyParts.trackKind,
     tokens: toCompactTokens(tokens),
   });
-  await saveTranscriptCache(next);
 }
 
 export async function recallTokens(
@@ -291,7 +380,7 @@ export async function recallTokens(
   const tokens = memoryGet(key) ?? fromCompactTokens(entry.tokens);
   memorySet(key, tokens);
   if (Date.now() - entry.savedAt >= CACHE_TOUCH_MIN_MS) {
-    await saveTranscriptCache(touchCacheEntry(store, key));
+    void requestCacheMutation({ kind: 'touch', key }).catch(() => undefined);
   }
   return tokens;
 }

@@ -357,17 +357,22 @@ export function collapseRepeatedPhrases(tokens: WordToken[]): WordToken[] {
     let period = 0;
     let copies = 1;
     for (let length = MIN_REPEAT_PHRASE; length <= maxPeriod; length += 1) {
-      if (rangeHasMeta(tokens, index, length * 2)) {
+      // Cheapest rejections first: almost every candidate fails on the first
+      // key or the period, and this loop runs for every token (O(n × 48)).
+      if (keys[index + length] !== keys[index]) {
         continue;
       }
-      if (uniqueKeyCount(keys, index, length) < 3) {
+      const periodDt = tokens[index + length].t0 - tokens[index].t0;
+      if (!(periodDt > 0) || periodDt > MAX_PHRASE_PERIOD_SEC) {
         continue;
       }
       if (!keysMatch(keys, index, index + length, length)) {
         continue;
       }
-      const periodDt = tokens[index + length].t0 - tokens[index].t0;
-      if (!(periodDt > 0) || periodDt > MAX_PHRASE_PERIOD_SEC) {
+      if (rangeHasMeta(tokens, index, length * 2)) {
+        continue;
+      }
+      if (uniqueKeyCount(keys, index, length) < 3) {
         continue;
       }
       let count = 2;

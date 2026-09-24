@@ -285,8 +285,11 @@ export function buildSpeedCurve(
   tokens: WordToken[],
   options: CurveBuildOptions,
 ): SpeedCurve {
+  // video.duration is NaN before metadata and Infinity on live streams; either
+  // would poison Math.max and drop the trailing knot.
+  const hint = options.durationHint;
   const duration = Math.max(
-    options.durationHint ?? 0,
+    hint != null && Number.isFinite(hint) ? hint : 0,
     tokens.reduce((max, token) => Math.max(max, token.t1), 0),
   );
 

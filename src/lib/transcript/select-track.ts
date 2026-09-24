@@ -1,6 +1,6 @@
 import type { CaptionTrack } from './types';
 import { isEnglishLanguageCode } from '../pacing/syllables';
-import { isAsrCaptionTrack } from './spoken-language';
+import { isAsrCaptionTrack, primaryLanguageTag } from './spoken-language';
 import { isAllowedYouTubeHost } from '../youtube/video-id';
 
 export function isAllowedTimedTextUrl(
@@ -216,11 +216,18 @@ function captionTrackScore(
   const language = options.language.toLowerCase();
   const code = track.languageCode?.toLowerCase() ?? '';
   const languageMatches = code === language || code.startsWith(`${language}-`);
+  // A pinned regional variant (en-US, pt-BR) should still beat other languages
+  // when YouTube only offers the base-language track (en, pt).
+  const baseLanguageMatches =
+    !languageMatches &&
+    primaryLanguageTag(code).length >= 2 &&
+    primaryLanguageTag(code) === primaryLanguageTag(language);
   const asr = isAsrCaptionTrack(track);
   const animated = isAnimatedCaptionTrack(track);
   const standard = isStandardCaptionTrack(track);
   let value = 0;
   if (languageMatches) value += 8;
+  else if (baseLanguageMatches) value += 7.5;
   if (animated) {
     value -= 6;
   } else if (options.preferManual && !asr) {

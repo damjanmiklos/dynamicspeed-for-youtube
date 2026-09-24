@@ -118,6 +118,11 @@ export default defineContentScript({
 
     const applySettings = (settings: DynamicSpeedSettings) => {
       const previous = appliedSettings;
+      // Every change arrives twice (storage.onChanged here and the background's
+      // SETTINGS_CHANGED message); each apply rebuilds the whole speed curve.
+      if (previous && JSON.stringify(previous) === JSON.stringify(settings)) {
+        return;
+      }
       const turningOn = Boolean(previous && !previous.enabled && settings.enabled);
       appliedSettings = settings;
       if (!settings.enabled) {
@@ -219,14 +224,19 @@ export default defineContentScript({
           }
           const settings = await loadSettings();
           const existing = settings.channelOverrides[state.channelId] ?? {};
-          const next = {
-            ...settings.channelOverrides,
-            [state.channelId]: {
+          const next = { ...settings.channelOverrides };
+          const disabled = !existing.disabled;
+          if (!disabled && existing.targetWpm == null && existing.maxSpeed == null) {
+            // Nothing left to override; do not let re-enabled channels pile up
+            // against the override cap.
+            delete next[state.channelId];
+          } else {
+            next[state.channelId] = {
               ...existing,
-              disabled: !existing.disabled,
+              disabled,
               name: state.channelName ?? existing.name,
-            },
-          };
+            };
+          }
           await patchSettings({ channelOverrides: next });
           sendResponse(controller.getPageState());
         })();

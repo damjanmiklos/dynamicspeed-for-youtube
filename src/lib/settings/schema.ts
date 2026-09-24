@@ -8,8 +8,11 @@ export const ChannelOverrideSchema = z.object({
   name: z.string().max(200).optional(),
 });
 
-export const DynamicSpeedSettingsSchema = z
-  .object({
+export const MAX_CHANNEL_OVERRIDES = 100;
+export const MAX_DISABLED_VIDEOS = 200;
+
+/** Field shape without the cross-field refine, for per-field salvage. */
+export const DynamicSpeedSettingsObject = z.object({
     version: z.number().default(5),
     enabled: z.boolean().default(true),
     targetWpm: z.number().min(LIMITS.targetWpm.min).max(LIMITS.targetWpm.max).default(165),
@@ -41,7 +44,7 @@ export const DynamicSpeedSettingsSchema = z
     channelOverrides: z
       .record(z.string().max(64), ChannelOverrideSchema)
       .default({})
-      .refine((value) => Object.keys(value).length <= 100, {
+      .refine((value) => Object.keys(value).length <= MAX_CHANNEL_OVERRIDES, {
         message: 'Too many channel overrides',
       })
       .refine(
@@ -51,7 +54,7 @@ export const DynamicSpeedSettingsSchema = z
           ),
         { message: 'Invalid channel override key' },
       ),
-    disabledVideoIds: z.array(z.string().max(32)).max(200).default([]),
+    disabledVideoIds: z.array(z.string().max(32)).max(MAX_DISABLED_VIDEOS).default([]),
     captionLanguage: z.string().min(2).max(16).default('auto'),
     preferManualCaptions: z.boolean().default(false),
     temporarilyEnableCaptions: z.boolean().default(true),
@@ -66,7 +69,9 @@ export const DynamicSpeedSettingsSchema = z
     showWpmInTooltip: z.boolean().default(true),
 
     expireCaptionCacheAfterWeek: z.boolean().default(true),
-  })
+  });
+
+export const DynamicSpeedSettingsSchema = DynamicSpeedSettingsObject
   .refine((settings) => settings.minSpeed < settings.maxSpeed, {
     message: 'minSpeed must be less than maxSpeed',
     path: ['minSpeed'],

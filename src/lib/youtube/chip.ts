@@ -78,14 +78,28 @@ export function upsertPlayerChip(options: {
     }
   }
 
-  chip.textContent = options.label;
-  chip.title = options.title;
-  chip.dataset.dsInactive = options.inactive ? 'true' : 'false';
-  chip.dataset.dsConflict = options.conflict ? 'true' : 'false';
-  if (options.conflict) {
-    chip.setAttribute('aria-label', 'DynamicSpeed playback rate. Another extension is forcing a fixed speed.');
-  } else {
-    chip.setAttribute('aria-label', 'DynamicSpeed playback rate');
+  // Called every animation frame. Only touch the DOM when something changed:
+  // assigning textContent always replaces the text node, which restyles the
+  // control bar and wakes every MutationObserver on the player 60×/s.
+  if (chip.textContent !== options.label) {
+    chip.textContent = options.label;
+  }
+  if (chip.title !== options.title) {
+    chip.title = options.title;
+  }
+  const inactive = options.inactive ? 'true' : 'false';
+  if (chip.dataset.dsInactive !== inactive) {
+    chip.dataset.dsInactive = inactive;
+  }
+  const conflict = options.conflict ? 'true' : 'false';
+  if (chip.dataset.dsConflict !== conflict) {
+    chip.dataset.dsConflict = conflict;
+  }
+  const ariaLabel = options.conflict
+    ? 'DynamicSpeed playback rate. Another extension is forcing a fixed speed.'
+    : 'DynamicSpeed playback rate';
+  if (chip.getAttribute('aria-label') !== ariaLabel) {
+    chip.setAttribute('aria-label', ariaLabel);
   }
   if (options.onClick) {
     chip.onclick = options.onClick;

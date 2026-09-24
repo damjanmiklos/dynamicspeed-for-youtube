@@ -93,3 +93,27 @@ describe('selectCaptionTrack with auto-resolved language', () => {
     );
   });
 });
+
+describe('selectCaptionTrack with a pinned regional language', () => {
+  const tracks = [
+    { baseUrl: 'de-asr', languageCode: 'de', kind: 'asr' },
+    { baseUrl: 'en', languageCode: 'en' },
+    { baseUrl: 'pt', languageCode: 'pt', kind: 'asr' },
+  ];
+
+  it('falls back to the base-language track (en-US → en)', () => {
+    expect(
+      selectCaptionTrack(tracks, { language: 'en-US', preferManual: false })?.baseUrl,
+    ).toBe('en');
+    expect(
+      selectCaptionTrack(tracks, { language: 'pt-BR', preferManual: true })?.baseUrl,
+    ).toBe('pt');
+  });
+
+  it('still prefers an exact regional match', () => {
+    const withRegional = [...tracks, { baseUrl: 'en-GB', languageCode: 'en-GB' }];
+    expect(
+      selectCaptionTrack(withRegional, { language: 'en-GB', preferManual: false })?.baseUrl,
+    ).toBe('en-GB');
+  });
+});

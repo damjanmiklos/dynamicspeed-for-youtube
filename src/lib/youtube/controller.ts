@@ -35,6 +35,9 @@ import { createSpeedConflictTracker, stolenPlaybackRate } from './speed-conflict
 import { isShortsPath, parseVideoId } from './video-id';
 import type { PageState } from '../messaging/protocol';
 
+/** Timer cadence while the tab is hidden; matches the per-tick dt cap. */
+const HIDDEN_TICK_MS = 250;
+
 export type ControllerHooks = {
   getChannel: () => { channelId: string | null; channelName: string | null; title: string | null; isLive: boolean; isMusic: boolean };
 };
@@ -114,6 +117,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
       video.removeEventListener('ratechange', onRateChange);
       video.removeEventListener('seeking', onSeek);
       video.removeEventListener('seeked', onSeek);
+      video.removeEventListener('durationchange', onDurationChange);
     }
     video = next;
     introActive = false;
@@ -125,7 +129,24 @@ export function createPlaybackController(hooks: ControllerHooks) {
       video.addEventListener('ratechange', onRateChange);
       video.addEventListener('seeking', onSeek);
       video.addEventListener('seeked', onSeek);
+      video.addEventListener('durationchange', onDurationChange);
     }
+  }
+
+  /**
+   * Captions (especially cached ones) can arrive before metadata, when
+   * video.duration is still NaN. Rebuild once the real length is known so the
+   * trailing b-roll stretch after the last word gets its knots.
+   */
+  function onDurationChange(): void {
+    if (!video || tokens.length === 0) {
+      return;
+    }
+    const duration = video.duration;
+    if (!Number.isFinite(duration) || (curve && duration <= curve.duration + 0.5)) {
+      return;
+    }
+    rebuildCurve(duration);
   }
 
   function onRateChange(): void {
@@ -239,7 +260,11 @@ export function createPlaybackController(hooks: ControllerHooks) {
         commitRate(fallbackRate(current));
         restoredDisableKey = key;
       }
-      updateChip(video.playbackRate, current);
+      updateChip(
+        video.playbackRate,
+        current,
+        forceHold != null ? `forced ${formatRate(forceHold, 2)}` : undefined,
+      );
       return;
     }
 
@@ -371,8 +396,16 @@ export function createPlaybackController(hooks: ControllerHooks) {
       handle = requestAnimationFrame(step);
     };
     step();
+    // Hidden tabs get no animation frames, so background listening used to
+    // freeze the rate at whatever it was when the tab lost focus.
+    const hiddenTimer = window.setInterval(() => {
+      if (document.hidden) {
+        tick();
+      }
+    }, HIDDEN_TICK_MS);
     stopLoop = () => {
       cancelAnimationFrame(handle);
+      window.clearInterval(hiddenTimer);
     };
   }
 
@@ -489,6 +522,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
         video.removeEventListener('ratechange', onRateChange);
         video.removeEventListener('seeking', onSeek);
         video.removeEventListener('seeked', onSeek);
+        video.removeEventListener('durationchange', onDurationChange);
       }
     },
   };

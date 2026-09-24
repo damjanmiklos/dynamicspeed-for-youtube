@@ -13,6 +13,8 @@ import type { DynamicSpeedSettings } from '../settings/schema';
 import { MAX_CAPTION_TRACKS, MAX_TOKENS } from '../transcript/limits';
 
 export type AcquireResult = {
+  /** Watch-page video the tokens were acquired for. */
+  videoId: string;
   tokens: WordToken[];
   source: string;
   track: CaptionTrack | null;
@@ -154,7 +156,7 @@ export async function acquireTranscript(
     });
     throwIfAborted(signal);
     if (cached && cached.length > 0 && cached.length <= MAX_TOKENS) {
-      return { tokens: cached, source: 'cache', track, snapshot };
+      return { videoId: trustedId, tokens: cached, source: 'cache', track, snapshot };
     }
   }
 
@@ -185,6 +187,7 @@ export async function acquireTranscript(
       capturedTokens,
     );
     return {
+      videoId: trustedId,
       tokens: capturedTokens,
       source: 'capture',
       track,

@@ -17,6 +17,7 @@ import {
 } from '../../lib/messaging/protocol';
 import { isYouTubeTabUrl } from '../../lib/youtube/video-id';
 import { transcriptDownloadName } from '../../lib/transcript/export';
+import { downloadJson } from '../../ui/download';
 
 async function exportCurrentTranscript(): Promise<void> {
   const tabs = await browser.tabs.query({ active: true, currentWindow: true });
@@ -32,15 +33,7 @@ async function exportCurrentTranscript(): Promise<void> {
     if (!isRuntimeMessage(response) || response.type !== 'TRANSCRIPT') {
       return;
     }
-    const blob = new Blob([JSON.stringify(response.transcript, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = transcriptDownloadName(response.transcript.videoId);
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadJson(transcriptDownloadName(response.transcript.videoId), response.transcript);
   } catch {
     // Tab has no content script or captions are not ready.
   }

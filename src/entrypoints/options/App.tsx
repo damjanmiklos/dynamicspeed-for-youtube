@@ -9,6 +9,7 @@ import { Toggle } from '../../ui/components/Toggle';
 import { InfoTip } from '../../ui/components/InfoTip';
 import { SETTINGS_HELP, type SettingHelp } from '../../ui/settings-help';
 import { useSettings } from '../../ui/hooks/useSettings';
+import { downloadJson } from '../../ui/download';
 import { resetSettings } from '../../lib/settings/storage';
 import { TRANSCRIPT_CACHE_KEY } from '../../lib/settings/schema';
 import {
@@ -295,17 +296,7 @@ export function OptionsApp() {
                 </button>
                 <button
                   className="rounded-lg border border-ds-border px-4 py-2 text-sm"
-                  onClick={() => {
-                    const blob = new Blob([JSON.stringify(settings, null, 2)], {
-                      type: 'application/json',
-                    });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = 'dynamicspeed-settings.json';
-                    link.click();
-                    URL.revokeObjectURL(url);
-                  }}
+                  onClick={() => downloadJson('dynamicspeed-settings.json', settings)}
                 >
                   Export JSON
                 </button>

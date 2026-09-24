@@ -90,7 +90,7 @@ export default defineContentScript({
           }
           if (result.tokens.length > 0) {
             snapshot = result.snapshot;
-            controller.setTokens(result.tokens, 'ready');
+            controller.setTokens(result.tokens, 'ready', result.videoId);
             return;
           }
         } catch (error) {

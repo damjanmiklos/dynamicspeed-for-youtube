@@ -1,5 +1,6 @@
 import { MAX_TOKENS, MAX_WORD_CHARS } from '../transcript/limits';
 import type { TranscriptExport } from '../transcript/export';
+import type { CacheMutation } from '../youtube/cache';
 
 export const RUNTIME_SOURCE = 'dynamicspeed-runtime';
 
@@ -30,7 +31,10 @@ export type RuntimeMessage =
   | { source: typeof RUNTIME_SOURCE; type: 'TOGGLE_VIDEO' }
   | { source: typeof RUNTIME_SOURCE; type: 'OPEN_OPTIONS' }
   | { source: typeof RUNTIME_SOURCE; type: 'COMMAND'; command: string }
-  | { source: typeof RUNTIME_SOURCE; type: 'SETTINGS_CHANGED' };
+  | { source: typeof RUNTIME_SOURCE; type: 'SETTINGS_CHANGED' }
+  | { source: typeof RUNTIME_SOURCE; type: 'CACHE_MUTATION'; mutation: CacheMutation };
+
+const CACHE_MUTATION_KINDS = new Set(['put', 'touch', 'prune', 'clear']);
 
 function isTranscriptExport(value: unknown): value is TranscriptExport {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -73,6 +77,16 @@ export function isRuntimeMessage(data: unknown): data is RuntimeMessage {
       return typeof message.state === 'object' && message.state !== null;
     case 'TRANSCRIPT':
       return isTranscriptExport(message.transcript);
+    case 'CACHE_MUTATION': {
+      // Field-level checks happen where the mutation is applied.
+      const mutation = message.mutation as { kind?: unknown } | null;
+      return (
+        typeof mutation === 'object' &&
+        mutation !== null &&
+        typeof mutation.kind === 'string' &&
+        CACHE_MUTATION_KINDS.has(mutation.kind)
+      );
+    }
     case 'COMMAND':
       return typeof message.command === 'string' && message.command.length <= 64;
     default:

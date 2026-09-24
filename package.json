@@ -2,7 +2,7 @@
   "name": "dynamicspeed-for-youtube",
   "description": "Automatically match YouTube playback speed to your target words-per-minute.",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.3.0",
   "license": "MIT",
   "type": "module",
   "engines": {

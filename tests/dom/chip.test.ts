@@ -46,14 +46,15 @@ describe('player chip', () => {
       reason: 'music',
       title: 'DynamicSpeed',
     });
+    const why = () => chip?.querySelector<HTMLElement>('.ds-why');
     expect(chip?.querySelector('.ds-rate')?.textContent).toBe('1.00×');
-    expect(chip?.querySelector('.ds-why')?.textContent).toBe('music');
-    expect(chip?.querySelector('.ds-why')?.hidden).toBe(false);
+    expect(why()?.textContent).toBe('music');
+    expect(why()?.hidden).toBe(false);
     expect(chip?.getAttribute('aria-label')).toBe('DynamicSpeed playback rate, music');
 
     upsertPlayerChip({ label: '1.80×', reason: null, title: 'DynamicSpeed' });
-    expect(chip?.querySelector('.ds-why')?.hidden).toBe(true);
-    expect(chip?.querySelector('.ds-why')?.textContent).toBe('');
+    expect(why()?.hidden).toBe(true);
+    expect(why()?.textContent).toBe('');
   });
 });
 

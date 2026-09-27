@@ -105,6 +105,10 @@ describe('controller releases speed when disabled', () => {
 
   it('holds music videos at 1× even when Default speed is 2×', async () => {
     const video = mountVideo(2.5);
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      `<div class="ytp-right-controls"><button class="ytp-settings-button ytp-button"></button></div>`,
+    );
     const controller = createPlaybackController({
       getChannel: () => ({ ...idleChannel, isMusic: true }),
     });
@@ -118,6 +122,10 @@ describe('controller releases speed when disabled', () => {
     controller.start();
     await flushFrames();
     expect(video.playbackRate).toBeCloseTo(1, 2);
+    const chip = document.querySelector('.dynamicspeed-chip');
+    expect(chip?.querySelector('.ds-rate')?.textContent).toBe('1.00×');
+    expect(chip?.querySelector('.ds-why')?.textContent).toBe('music');
+    expect(chip?.title).toContain('Music category, held at 1×');
 
     video.playbackRate = 2;
     await flushFrames();

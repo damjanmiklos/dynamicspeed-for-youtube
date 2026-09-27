@@ -1,6 +1,11 @@
 /** @vitest-environment happy-dom */
 import { describe, expect, it } from 'vitest';
-import { formatRate, upsertPlayerChip } from '../../src/lib/youtube/chip';
+import {
+  chipHoldDetail,
+  chipHoldReason,
+  formatRate,
+  upsertPlayerChip,
+} from '../../src/lib/youtube/chip';
 
 describe('player chip', () => {
   it('formats missing rates as an em dash', () => {
@@ -28,5 +33,99 @@ describe('player chip', () => {
     expect(document.querySelectorAll('.dynamicspeed-chip')).toHaveLength(1);
     expect(again).toBe(chip);
     expect(again?.dataset.dsConflict).toBe('true');
+  });
+
+  it('shows a short reason beside the rate when a rule holds speed', () => {
+    document.body.innerHTML = `
+      <div class="ytp-right-controls">
+        <button class="ytp-settings-button ytp-button"></button>
+      </div>
+    `;
+    const chip = upsertPlayerChip({
+      label: '1.00×',
+      reason: 'music',
+      title: 'DynamicSpeed',
+    });
+    expect(chip?.querySelector('.ds-rate')?.textContent).toBe('1.00×');
+    expect(chip?.querySelector('.ds-why')?.textContent).toBe('music');
+    expect(chip?.querySelector('.ds-why')?.hidden).toBe(false);
+    expect(chip?.getAttribute('aria-label')).toBe('DynamicSpeed playback rate, music');
+
+    upsertPlayerChip({ label: '1.80×', reason: null, title: 'DynamicSpeed' });
+    expect(chip?.querySelector('.ds-why')?.hidden).toBe(true);
+    expect(chip?.querySelector('.ds-why')?.textContent).toBe('');
+  });
+});
+
+describe('chip hold reasons', () => {
+  it('names the rule that pins music videos at 1×', () => {
+    expect(
+      chipHoldReason({
+        blockReason: 'music-disabled',
+        transcriptStatus: 'ready',
+        curveActive: true,
+      }),
+    ).toBe('music');
+    expect(chipHoldDetail('music', true)).toBe('Music category, held at 1×');
+  });
+
+  it('names caption fallback and disable rules that use Default speed', () => {
+    expect(
+      chipHoldReason({
+        blockReason: null,
+        transcriptStatus: 'loading',
+        curveActive: false,
+      }),
+    ).toBe('loading');
+    expect(
+      chipHoldReason({
+        blockReason: null,
+        transcriptStatus: 'missing',
+        curveActive: false,
+      }),
+    ).toBe('no captions');
+    expect(
+      chipHoldReason({
+        blockReason: 'paused',
+        transcriptStatus: 'ready',
+        curveActive: false,
+      }),
+    ).toBe('off');
+    expect(chipHoldDetail('off', true)).toBe('DynamicSpeed is off, using Default speed');
+    expect(chipHoldDetail('off', false)).toBe('DynamicSpeed is off');
+  });
+
+  it('stays quiet while the curve is driving speed, and during ads or a manual override', () => {
+    expect(
+      chipHoldReason({
+        blockReason: null,
+        transcriptStatus: 'ready',
+        curveActive: true,
+      }),
+    ).toBeNull();
+    expect(
+      chipHoldReason({
+        blockReason: null,
+        transcriptStatus: 'ready',
+        curveActive: true,
+        mode: 'ad',
+      }),
+    ).toBeNull();
+    expect(
+      chipHoldReason({
+        blockReason: null,
+        transcriptStatus: 'ready',
+        curveActive: false,
+        mode: 'manual',
+      }),
+    ).toBeNull();
+    expect(
+      chipHoldReason({
+        blockReason: null,
+        transcriptStatus: 'ready',
+        curveActive: false,
+        mode: 'forced 1.00×',
+      }),
+    ).toBe('held');
   });
 });

@@ -235,6 +235,7 @@ export const SETTINGS_HELP = {
     label: 'About the player chip',
     body: [
       'Shows the current playback rate as a small control immediately to the left of YouTube’s settings gear on the player.',
+      'When a rule holds playback at 1× or at Default speed, the chip adds a short reason, such as music, loading, or no captions.',
       'The chip looks dimmed when automation is paused (ads, manual override, missing captions, or a disable rule). Clicking it toggles Enable.',
       'If another extension is forcing a fixed speed, the chip turns red as a second warning besides the popup banner.',
     ],

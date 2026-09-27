@@ -18,6 +18,8 @@ import { wpmAdjustmentsActive } from '../pacing/wpm-calibration';
 import type { WordToken } from '../transcript/types';
 import { isAdShowing, findMainVideo } from './ads';
 import {
+  chipHoldDetail,
+  chipHoldReason,
   chipIsCorrectlyPlaced,
   formatRate,
   observePlayerChrome,
@@ -369,26 +371,32 @@ export function createPlaybackController(hooks: ControllerHooks) {
       removePlayerChip();
       return;
     }
-    const spoken =
-      curve && curveReady() && video ? wpmAt(curve, video.currentTime) : null;
+    const curveActive = curveReady();
+    const spoken = curve && curveActive && video ? wpmAt(curve, video.currentTime) : null;
     const wpmUnit = current && wpmAdjustmentsActive(current) ? 'adjusted WPM' : 'WPM';
     const conflict = speedConflict.isActive();
-    const inactive =
-      !current.automationAllowed ||
-      Boolean(mode) ||
-      !curveReady();
+    const inactive = !current.automationAllowed || Boolean(mode) || !curveActive;
+    const reason = chipHoldReason({
+      blockReason: current.blockReason,
+      transcriptStatus,
+      curveActive,
+      mode,
+    });
+    const holdDetail = reason ? chipHoldDetail(reason, current.restore1xWhenDisabled) : '';
     const titleParts = [
       'DynamicSpeed for YouTube',
       `Target ${current.targetWpm} WPM`,
       spoken ? `Speech ~${Math.round(spoken)} ${wpmUnit}` : `Captions: ${transcriptStatus}`,
-      current.blockReason ? `Paused: ${current.blockReason}` : '',
-      mode ? `Mode: ${mode}` : '',
+      holdDetail,
+      !holdDetail && current.blockReason ? `Paused: ${current.blockReason}` : '',
+      !holdDetail && mode ? `Mode: ${mode}` : '',
       conflict
         ? 'Another extension is forcing a fixed speed. Disable that speed control.'
         : '',
     ].filter(Boolean);
     upsertPlayerChip({
       label: formatRate(rate, current.chipDecimalPlaces),
+      reason,
       title: current.showWpmInTooltip ? titleParts.join('\n') : 'DynamicSpeed',
       inactive,
       conflict,

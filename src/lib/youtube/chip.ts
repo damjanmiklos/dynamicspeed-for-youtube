@@ -5,6 +5,8 @@ const CHIP_STYLE = `
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto !important;
+  width: auto !important;
   min-width: 52px;
   padding: 0 8px !important;
   font-size: 13px !important;
@@ -12,6 +14,14 @@ const CHIP_STYLE = `
   font-family: Roboto, Arial, sans-serif !important;
   letter-spacing: 0.04em;
   color: #fff !important;
+  white-space: nowrap !important;
+}
+.ytp-button.${CHIP_CLASS} .ds-why {
+  margin-left: 4px;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  opacity: 0.9;
 }
 .ytp-button.${CHIP_CLASS}[data-ds-inactive="true"] {
   opacity: 0.55;
@@ -39,6 +49,76 @@ export function formatRate(rate: number | null, decimals: number): string {
   return `${rate.toFixed(decimals)}×`;
 }
 
+const BLOCK_HOLD_REASONS: Record<string, string> = {
+  'music-disabled': 'music',
+  paused: 'off',
+  'video-disabled': 'video',
+  'channel-disabled': 'channel',
+  'shorts-disabled': 'shorts',
+};
+
+/**
+ * Short chip suffix when a rule is holding playback at 1× or Default speed.
+ * Null while the WPM curve is driving the rate.
+ */
+export function chipHoldReason(input: {
+  blockReason: string | null;
+  transcriptStatus: string;
+  curveActive: boolean;
+  mode?: string;
+}): string | null {
+  if (input.mode === 'ad' || input.mode === 'manual') {
+    return null;
+  }
+  if (input.mode?.startsWith('forced')) {
+    return 'held';
+  }
+  const blocked = input.blockReason ? BLOCK_HOLD_REASONS[input.blockReason] : undefined;
+  if (blocked) {
+    return blocked;
+  }
+  if (input.curveActive) {
+    return null;
+  }
+  if (input.transcriptStatus === 'missing') {
+    return 'no captions';
+  }
+  if (input.transcriptStatus === 'no-video') {
+    return 'no video';
+  }
+  return 'loading';
+}
+
+/** One tooltip line for a hold reason. */
+export function chipHoldDetail(reason: string, restoreDefault: boolean): string {
+  if (reason === 'music') {
+    return 'Music category, held at 1×';
+  }
+  if (reason === 'loading') {
+    return 'Waiting for captions, using Default speed';
+  }
+  if (reason === 'no captions') {
+    return 'No captions, using Default speed';
+  }
+  if (reason === 'no video') {
+    return 'No video, using Default speed';
+  }
+  if (reason === 'held') {
+    return 'Speed held';
+  }
+  const what =
+    reason === 'off'
+      ? 'DynamicSpeed is off'
+      : reason === 'video'
+        ? 'This video is turned off'
+        : reason === 'channel'
+          ? 'This channel is turned off'
+          : reason === 'shorts'
+            ? 'Shorts are turned off'
+            : reason;
+  return restoreDefault ? `${what}, using Default speed` : what;
+}
+
 export function chipIsCorrectlyPlaced(): boolean {
   const chip = document.querySelector<HTMLElement>(`.ytp-button.${CHIP_CLASS}`);
   const settings = document.querySelector('.ytp-settings-button');
@@ -48,8 +128,33 @@ export function chipIsCorrectlyPlaced(): boolean {
   return chip.nextElementSibling === settings;
 }
 
+function syncChipText(chip: HTMLButtonElement, label: string, reason: string | null): void {
+  let rate = chip.querySelector<HTMLElement>('.ds-rate');
+  let why = chip.querySelector<HTMLElement>('.ds-why');
+  if (!rate || !why) {
+    chip.textContent = '';
+    rate = document.createElement('span');
+    rate.className = 'ds-rate';
+    why = document.createElement('span');
+    why.className = 'ds-why';
+    chip.append(rate, why);
+  }
+  if (rate.textContent !== label) {
+    rate.textContent = label;
+  }
+  const whyText = reason ?? '';
+  if (why.textContent !== whyText) {
+    why.textContent = whyText;
+  }
+  const hideWhy = !reason;
+  if (why.hidden !== hideWhy) {
+    why.hidden = hideWhy;
+  }
+}
+
 export function upsertPlayerChip(options: {
   label: string;
+  reason?: string | null;
   title: string;
   inactive?: boolean;
   conflict?: boolean;
@@ -81,9 +186,7 @@ export function upsertPlayerChip(options: {
   // Called every animation frame. Only touch the DOM when something changed:
   // assigning textContent always replaces the text node, which restyles the
   // control bar and wakes every MutationObserver on the player 60×/s.
-  if (chip.textContent !== options.label) {
-    chip.textContent = options.label;
-  }
+  syncChipText(chip, options.label, options.reason ?? null);
   if (chip.title !== options.title) {
     chip.title = options.title;
   }
@@ -97,7 +200,9 @@ export function upsertPlayerChip(options: {
   }
   const ariaLabel = options.conflict
     ? 'DynamicSpeed playback rate. Another extension is forcing a fixed speed.'
-    : 'DynamicSpeed playback rate';
+    : options.reason
+      ? `DynamicSpeed playback rate, ${options.reason}`
+      : 'DynamicSpeed playback rate';
   if (chip.getAttribute('aria-label') !== ariaLabel) {
     chip.setAttribute('aria-label', ariaLabel);
   }

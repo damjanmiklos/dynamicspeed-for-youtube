@@ -113,7 +113,8 @@ describe('controller runtime', () => {
     const chip = document.querySelector<HTMLElement>('.dynamicspeed-chip');
     expect(video.playbackRate).toBeCloseTo(1, 2);
     expect(chip?.dataset.dsInactive).toBe('true');
-    expect(chip?.title).toContain('forced');
+    expect(chip?.querySelector('.ds-why')?.textContent).toBe('held');
+    expect(chip?.title).toContain('Speed held');
     controller.destroy();
   });
 });

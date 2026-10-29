@@ -671,7 +671,7 @@ export function OptionsApp() {
                   }
                 />
               </Row>
-              <Row title="Restore default speed when disabled" hint="Reset playback to Default speed when DynamicSpeed is turned off." help={SETTINGS_HELP.restore1x}>
+              <Row title="Restore 1× when disabled" hint="Reset playback to 1× when DynamicSpeed is turned off." help={SETTINGS_HELP.restore1x}>
                 <div className="flex justify-end">
                   <Toggle
                     checked={settings.restore1xWhenDisabled}

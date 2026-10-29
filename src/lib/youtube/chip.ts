@@ -90,7 +90,7 @@ export function chipHoldReason(input: {
 }
 
 /** One tooltip line for a hold reason. */
-export function chipHoldDetail(reason: string, restoreDefault: boolean): string {
+export function chipHoldDetail(reason: string, restoreOnDisable: boolean): string {
   if (reason === 'music') {
     return 'Music category, held at 1×';
   }
@@ -116,7 +116,7 @@ export function chipHoldDetail(reason: string, restoreDefault: boolean): string 
           : reason === 'shorts'
             ? 'Shorts are turned off'
             : reason;
-  return restoreDefault ? `${what}, using Default speed` : what;
+  return restoreOnDisable ? `${what}, set to 1×` : what;
 }
 
 export function chipIsCorrectlyPlaced(): boolean {

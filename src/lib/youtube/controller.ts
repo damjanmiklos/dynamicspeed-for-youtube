@@ -274,7 +274,7 @@ export function createPlaybackController(hooks: ControllerHooks) {
       } else if (action === 'pin-native') {
         commitRate(NATIVE_PLAYBACK_RATE);
       } else if (action === 'restore-once') {
-        commitRate(fallbackRate(current));
+        commitRate(NATIVE_PLAYBACK_RATE);
         restoredDisableKey = key;
       }
       updateChip(

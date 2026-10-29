@@ -92,7 +92,7 @@ describe('chip hold reasons', () => {
         curveActive: false,
       }),
     ).toBe('off');
-    expect(chipHoldDetail('off', true)).toBe('DynamicSpeed is off, using Default speed');
+    expect(chipHoldDetail('off', true)).toBe('DynamicSpeed is off, set to 1×');
     expect(chipHoldDetail('off', false)).toBe('DynamicSpeed is off');
   });
 

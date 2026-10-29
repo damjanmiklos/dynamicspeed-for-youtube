@@ -8,7 +8,7 @@ export const SETTINGS_HELP = {
     label: 'About Enable',
     body: [
       'Master switch for DynamicSpeed. When this is on, the extension reads captions on this device and continuously sets YouTube’s playback rate so spoken words land near your Target WPM.',
-      'When it is off, DynamicSpeed does not fetch, capture, parse, or cache captions, and it does not drive playback rate. If Restore default speed when disabled is also on, playback is put back to Default speed. The toolbar popup, shortcuts, and player chip still work so you can turn it back on.',
+      'When it is off, DynamicSpeed does not fetch, capture, parse, or cache captions, and it does not drive playback rate. If Restore 1× when disabled is also on, playback is put back to 1×, not Default speed. The toolbar popup, shortcuts, and player chip still work so you can turn it back on.',
       'You can also flip this from the toolbar popup, by clicking the player chip, or with Alt+Shift+D.',
     ],
   },
@@ -41,7 +41,7 @@ export const SETTINGS_HELP = {
     body: [
       'The rate DynamicSpeed uses whenever it is enabled but the WPM curve is not ready — while captions are still being extracted, at the start of a video, and if captions cannot be found. Playback is held on this value until the transcript is ready; it does not follow a previous video’s curve in the meantime.',
       'Once captions arrive, speed eases from this default toward the calculated curve over about two seconds, so the first words are not a sudden snap.',
-      'If Restore default speed when disabled is on, turning DynamicSpeed off also sets playback to this rate instead of leaving the last automated speed.',
+      'Turning DynamicSpeed off does not use this rate. With Restore 1× when disabled on, that path sets playback to 1× once.',
       'Set this to 1× if you prefer ordinary YouTube until captions load. Set it nearer your usual listening speed if you would rather not wait at 1×.',
     ],
   },
@@ -223,10 +223,10 @@ export const SETTINGS_HELP = {
     ],
   },
   restore1x: {
-    label: 'About restore default speed when disabled',
+    label: 'About restore 1× when disabled',
     body: [
-      'When DynamicSpeed turns off — master switch, this video, this channel, or Shorts — playback is set back to Default speed once so YouTube does not stay stuck at the last automated rate. After that, YouTube’s own speed menu is left alone.',
-      'Music videos (when Ignore music videos is on) are different: they are held at 1×, not Default speed.',
+      'When DynamicSpeed turns off — master switch, this video, this channel, or Shorts — playback is set to 1× once so YouTube does not stay stuck at the last automated rate. After that, YouTube’s own speed menu is left alone. This is 1×, not your Default speed.',
+      'Music videos (when Ignore music videos is on) stay pinned at 1×, so a later manual speed change does not stick.',
       'Turn this off if you want the last speed to remain when you pause automation (for example you disabled the channel mid-video and like where it landed). Either way, DynamicSpeed stops writing playback rate on those disable rules so you can change speed by hand.',
       'This does not run during ads if Ignore ads is on, because we are not driving rate in that moment.',
     ],

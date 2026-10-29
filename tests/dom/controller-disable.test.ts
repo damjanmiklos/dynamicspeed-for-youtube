@@ -42,7 +42,7 @@ describe('controller releases speed when disabled', () => {
       ...DEFAULT_SETTINGS,
       enabled: false,
       restore1xWhenDisabled: true,
-      fallbackSpeed: 1,
+      fallbackSpeed: 2,
     });
     controller.start();
     await flushFrames();
@@ -68,7 +68,7 @@ describe('controller releases speed when disabled', () => {
       ...DEFAULT_SETTINGS,
       enabled: true,
       restore1xWhenDisabled: true,
-      fallbackSpeed: 1,
+      fallbackSpeed: 2,
       disabledVideoIds: ['dQw4w9wgGcQ'],
     });
     controller.start();
